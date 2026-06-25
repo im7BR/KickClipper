@@ -1,0 +1,21 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Compilation outputs
+build/
+dist/
+*.spec
+
+# Application runtime directories
+buffer/
+clips/
+config.json
+
+# IDE config folders
+.vscode/
+.idea/
+.venv/
+venv/
+env/

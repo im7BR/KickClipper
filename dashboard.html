@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kick Clipper — Moderator Dashboard</title>
+    <meta name="description" content="Real-time live stream clipping tool for Kick.com moderators" />
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <!-- Tailwind CSS CDN (v3) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        kick: { DEFAULT: '#53FC18', dark: '#3dd612', light: '#7dff52' },
+                        surface: {
+                            900: '#0a0a0f',
+                            800: '#0f0f1a',
+                            700: '#161625',
+                            600: '#1e1e32',
+                            500: '#2a2a42',
+                        },
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'spin-fast': 'spin 0.6s linear infinite',
+                        'slide-in': 'slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'slide-out': 'slideOut 0.3s cubic-bezier(0.55, 0, 1, 0.45)',
+                        'fade-in': 'fadeIn 0.25s ease-out',
+                        'modal-in': 'modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'banner-in': 'bannerIn 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                    },
+                    keyframes: {
+                        slideIn: {
+                            '0%': { transform: 'translateX(120%)', opacity: '0' },
+                            '100%': { transform: 'translateX(0)', opacity: '1' },
+                        },
+                        slideOut: {
+                            '0%': { transform: 'translateX(0)', opacity: '1' },
+                            '100%': { transform: 'translateX(120%)', opacity: '0' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        modalIn: {
+                            '0%': { transform: 'scale(0.9) translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'scale(1) translateY(0)', opacity: '1' },
+                        },
+                        glow: {
+                            '0%': { boxShadow: '0 0 20px rgba(83, 252, 24, 0.1)' },
+                            '100%': { boxShadow: '0 0 40px rgba(83, 252, 24, 0.25)' },
+                        },
+                        bannerIn: {
+                            '0%': { transform: 'translateY(-100%)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                    },
+                },
+            },
+        };
+    </script>
+
+    <style>
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0a0f; }
+        ::-webkit-scrollbar-thumb { background: #2a2a42; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #53FC18; }
+
+        .glass {
+            background: rgba(15, 15, 26, 0.7);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(83, 252, 24, 0.08);
+        }
+        .glass-strong {
+            background: rgba(22, 22, 37, 0.85);
+            backdrop-filter: blur(32px);
+            -webkit-backdrop-filter: blur(32px);
+            border: 1px solid rgba(83, 252, 24, 0.12);
+        }
+        .gradient-border {
+            position: relative;
+        }
+        .gradient-border::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(135deg, rgba(83, 252, 24, 0.3), rgba(83, 252, 24, 0.05), rgba(83, 252, 24, 0.2));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            opacity: 0.015;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 9999;
+        }
+        .clip-btn { position: relative; overflow: hidden; }
+        .clip-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255,255,255,0.12) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .clip-btn:hover::after { opacity: 1; }
+        @keyframes statusPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(83, 252, 24, 0.5); }
+            50% { box-shadow: 0 0 0 8px rgba(83, 252, 24, 0); }
+        }
+        .status-live { animation: statusPulse 2s ease-in-out infinite; }
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .spinner {
+            border: 3px solid rgba(83, 252, 24, 0.15);
+            border-top-color: #53FC18;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 0.7s linear infinite;
+        }
+        .toast-progress {
+            animation: shrink var(--duration, 4s) linear forwards;
+        }
+        @keyframes shrink {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+    </style>
+</head>
+
+<body class="bg-surface-900 text-white font-sans min-h-screen antialiased">
+
+    <!-- Background ambient glow -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+        <div class="absolute -top-40 -left-40 w-96 h-96 bg-kick/5 rounded-full blur-[120px]"></div>
+        <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-kick/3 rounded-full blur-[150px]"></div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- Update Banner (hidden by default) -->
+    <!-- ================================================================== -->
+    <div id="update-banner" class="hidden fixed top-0 left-0 right-0 z-40 animate-banner-in">
+        <div class="bg-gradient-to-r from-kick-dark/90 to-kick/90 backdrop-blur-sm px-4 py-2.5">
+            <div class="max-w-3xl mx-auto flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-surface-900 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    <span class="text-surface-900 text-sm font-bold">
+                        Update available: <span id="update-version-label">v0.0.0</span>
+                    </span>
+                    <span id="update-notes-short" class="text-surface-900/70 text-xs font-medium hidden sm:inline truncate max-w-[200px]"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button
+                        id="update-now-btn"
+                        onclick="applyUpdate()"
+                        class="px-4 py-1.5 bg-surface-900 text-kick rounded-lg text-xs font-bold hover:bg-surface-800 transition-all active:scale-95"
+                    >
+                        Update Now
+                    </button>
+                    <button
+                        onclick="dismissUpdateBanner()"
+                        class="p-1 text-surface-900/60 hover:text-surface-900 transition-colors"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div id="main-container" class="relative z-10 max-w-3xl mx-auto px-4 py-8 sm:py-12">
+
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <div class="inline-flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-kick to-kick-dark flex items-center justify-center shadow-lg shadow-kick/20">
+                    <svg class="w-5 h-5 text-surface-900" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m15.91 11.672a.375.375 0 0 1 0 .656l-5.603 3.113a.375.375 0 0 1-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                </div>
+                <h1 class="text-3xl sm:text-4xl font-black tracking-tight">
+                    <span class="bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">Kick</span>
+                    <span class="bg-gradient-to-r from-kick to-kick-light bg-clip-text text-transparent"> Clipper</span>
+                </h1>
+            </div>
+            <p class="text-gray-500 text-sm font-medium tracking-wide uppercase">Moderator Dashboard</p>
+        </header>
+
+        <!-- Channel Input Section -->
+        <section id="channel-section" class="glass rounded-2xl p-6 mb-6 gradient-border">
+            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Target Channel</label>
+            <div class="flex gap-3">
+                <div class="flex-1 relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <span class="text-gray-500 text-sm font-medium">kick.com/</span>
+                    </div>
+                    <input
+                        type="text"
+                        id="channel-input"
+                        placeholder="username"
+                        autocomplete="off"
+                        spellcheck="false"
+                        class="w-full bg-surface-800 border border-surface-500/50 rounded-xl py-3 pl-24 pr-4 text-white placeholder-gray-600 focus:outline-none focus:border-kick/50 focus:ring-1 focus:ring-kick/20 transition-all duration-200 text-sm font-medium"
+                    />
+                </div>
+                <button
+                    id="connect-btn"
+                    onclick="handleConnect()"
+                    class="px-6 py-3 bg-gradient-to-r from-kick-dark to-kick rounded-xl font-bold text-surface-900 text-sm hover:shadow-lg hover:shadow-kick/25 active:scale-[0.97] transition-all duration-200 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    Connect
+                </button>
+            </div>
+        </section>
+
+        <!-- Status Panel -->
+        <section id="status-panel" class="glass rounded-2xl p-5 mb-6 gradient-border">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div id="status-dot" class="w-3 h-3 rounded-full bg-gray-600 transition-colors duration-500"></div>
+                    <span id="status-text" class="text-sm font-semibold text-gray-400">Not connected</span>
+                </div>
+                <div id="status-meta" class="flex items-center gap-4 text-xs text-gray-500 font-mono">
+                    <span id="buffer-info" class="hidden">
+                        <span class="text-gray-600">BUF</span>
+                        <span id="buffer-seconds" class="text-gray-400 ml-1">0s</span>
+                    </span>
+                    <span id="uptime-info" class="hidden">
+                        <span class="text-gray-600">UP</span>
+                        <span id="uptime-display" class="text-gray-400 ml-1">0s</span>
+                    </span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Clip Buttons -->
+        <section id="clip-section" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <!-- 60s Button -->
+            <button id="clip-60-btn" onclick="openClipModal(60)" disabled
+                class="clip-btn group glass-strong rounded-2xl p-6 text-center cursor-pointer hover:border-kick/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 gradient-border">
+                <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 flex items-center justify-center group-hover:from-emerald-500/30 group-hover:to-emerald-600/20 transition-all duration-300">
+                    <svg class="w-7 h-7 text-emerald-400 group-hover:text-emerald-300 transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75H6A2.25 2.25 0 0 0 3.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0 1 20.25 6v1.5m0 9V18A2.25 2.25 0 0 1 18 20.25h-1.5m-9 0H6A2.25 2.25 0 0 1 3.75 18v-1.5M12 8.25v7.5m3.75-3.75H8.25" />
+                    </svg>
+                </div>
+                <div class="text-2xl font-black text-white mb-1 group-hover:text-emerald-300 transition-colors">60s</div>
+                <div class="text-xs text-gray-500 font-medium uppercase tracking-wider">Last Minute</div>
+            </button>
+
+            <!-- 120s Button -->
+            <button id="clip-120-btn" onclick="openClipModal(120)" disabled
+                class="clip-btn group glass-strong rounded-2xl p-6 text-center cursor-pointer hover:border-kick/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 gradient-border">
+                <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center group-hover:from-blue-500/30 group-hover:to-blue-600/20 transition-all duration-300">
+                    <svg class="w-7 h-7 text-blue-400 group-hover:text-blue-300 transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                    </svg>
+                </div>
+                <div class="text-2xl font-black text-white mb-1 group-hover:text-blue-300 transition-colors">120s</div>
+                <div class="text-xs text-gray-500 font-medium uppercase tracking-wider">Last 2 Minutes</div>
+            </button>
+
+            <!-- 280s Button -->
+            <button id="clip-280-btn" onclick="openClipModal(280)" disabled
+                class="clip-btn group glass-strong rounded-2xl p-6 text-center cursor-pointer hover:border-kick/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 gradient-border">
+                <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 flex items-center justify-center group-hover:from-purple-500/30 group-hover:to-purple-600/20 transition-all duration-300">
+                    <svg class="w-7 h-7 text-purple-400 group-hover:text-purple-300 transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h1.5C5.496 19.5 6 18.996 6 18.375m-2.625 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-1.5A1.125 1.125 0 0 1 18 18.375M20.625 4.5H3.375m17.25 0c.621 0 1.125.504 1.125 1.125M20.625 4.5h-1.5C18.504 4.5 18 5.004 18 5.625m3.75 0v1.5c0 .621-.504 1.125-1.125 1.125M3.375 4.5c-.621 0-1.125.504-1.125 1.125M3.375 4.5h1.5C5.496 4.5 6 5.004 6 5.625m-2.625 0v1.5c0 .621.504 1.125 1.125 1.125m0 0h13.5c.621 0 1.125-.504 1.125-1.125m-13.5 0v5.25m13.5-5.25v5.25m0-5.25h1.5" />
+                    </svg>
+                </div>
+                <div class="text-2xl font-black text-white mb-1 group-hover:text-purple-300 transition-colors">280s</div>
+                <div class="text-xs text-gray-500 font-medium uppercase tracking-wider">Last ~5 Minutes</div>
+            </button>
+        </section>
+
+        <!-- Footer with version + check updates -->
+        <footer class="flex items-center justify-between text-xs text-gray-600 px-1">
+            <p>Kick Clipper <span id="version-label">v1.0.0</span></p>
+            <button
+                id="check-update-btn"
+                onclick="checkForUpdates(true)"
+                class="flex items-center gap-1.5 text-gray-500 hover:text-kick transition-colors duration-200 group"
+            >
+                <svg class="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+                </svg>
+                <span>Check for Updates</span>
+            </button>
+        </footer>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- Title Modal -->
+    <!-- ================================================================== -->
+    <div id="clip-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+        <div id="modal-content" class="glass-strong rounded-3xl p-8 w-full max-w-md mx-4 animate-modal-in shadow-2xl shadow-black/50">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-kick/20 to-kick/5 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-kick" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">Name Your Clip</h2>
+                    <p id="modal-duration-label" class="text-xs text-gray-500 font-medium">Clipping last 60 seconds</p>
+                </div>
+            </div>
+            <input type="text" id="clip-title-input" placeholder="Enter a title for this clip..."
+                maxlength="200" autocomplete="off" spellcheck="false"
+                class="w-full bg-surface-800 border border-surface-500/50 rounded-xl py-3 px-4 text-white placeholder-gray-600 focus:outline-none focus:border-kick/50 focus:ring-1 focus:ring-kick/20 transition-all duration-200 text-sm font-medium mb-6" />
+            <div class="flex gap-3">
+                <button id="modal-cancel-btn" onclick="closeClipModal()"
+                    class="flex-1 py-3 px-4 rounded-xl bg-surface-700 text-gray-400 font-semibold text-sm hover:bg-surface-600 hover:text-gray-300 transition-all duration-200">Cancel</button>
+                <button id="modal-submit-btn" onclick="submitClip()"
+                    class="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-kick-dark to-kick text-surface-900 font-bold text-sm hover:shadow-lg hover:shadow-kick/25 active:scale-[0.97] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed">Create Clip</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- Loading Overlay -->
+    <!-- ================================================================== -->
+    <div id="loading-overlay" class="fixed inset-0 z-[60] hidden items-center justify-center modal-backdrop">
+        <div class="glass-strong rounded-3xl p-10 text-center animate-modal-in shadow-2xl shadow-black/50">
+            <div class="spinner mx-auto mb-5"></div>
+            <p id="loading-text" class="text-white font-bold text-lg mb-1">Creating Clip...</p>
+            <p id="loading-subtext" class="text-gray-500 text-sm">Slicing video from buffer</p>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- Toast Container -->
+    <!-- ================================================================== -->
+    <div id="toast-container" class="fixed top-6 right-6 z-[70] flex flex-col gap-3 pointer-events-none"></div>
+
+
+    <!-- ================================================================== -->
+    <!-- JavaScript Logic -->
+    <!-- ================================================================== -->
+    <script>
+        // -----------------------------------------------------------------
+        // Config — auto-detect API base (same origin when served by backend)
+        // -----------------------------------------------------------------
+        const API_BASE = window.location.origin !== 'null'
+            ? window.location.origin   // Served by FastAPI backend
+            : 'http://127.0.0.1:8000'; // Opened as file:// fallback
+        const STATUS_POLL_MS = 3000;
+
+        // -----------------------------------------------------------------
+        // DOM References
+        // -----------------------------------------------------------------
+        const $ = (id) => document.getElementById(id);
+
+        const channelInput    = $('channel-input');
+        const connectBtn      = $('connect-btn');
+        const statusDot       = $('status-dot');
+        const statusText      = $('status-text');
+        const bufferInfo      = $('buffer-info');
+        const bufferSeconds   = $('buffer-seconds');
+        const uptimeInfo      = $('uptime-info');
+        const uptimeDisplay   = $('uptime-display');
+        const clipBtns        = [$('clip-60-btn'), $('clip-120-btn'), $('clip-280-btn')];
+        const clipModal       = $('clip-modal');
+        const modalDurLabel   = $('modal-duration-label');
+        const clipTitleInput  = $('clip-title-input');
+        const modalSubmitBtn  = $('modal-submit-btn');
+        const loadingOverlay  = $('loading-overlay');
+        const loadingText     = $('loading-text');
+        const loadingSubtext  = $('loading-subtext');
+        const toastContainer  = $('toast-container');
+        const updateBanner    = $('update-banner');
+        const versionLabel    = $('version-label');
+        const mainContainer   = $('main-container');
+
+        // -----------------------------------------------------------------
+        // State
+        // -----------------------------------------------------------------
+        let pendingDuration = null;
+        let statusPollTimer = null;
+        let isConnecting = false;
+        let updateInfo = null;
+
+        // -----------------------------------------------------------------
+        // Clip Button hover tracking
+        // -----------------------------------------------------------------
+        document.querySelectorAll('.clip-btn').forEach(btn => {
+            btn.addEventListener('mousemove', (e) => {
+                const rect = btn.getBoundingClientRect();
+                btn.style.setProperty('--x', ((e.clientX - rect.left) / rect.width) * 100 + '%');
+                btn.style.setProperty('--y', ((e.clientY - rect.top) / rect.height) * 100 + '%');
+            });
+        });
+
+        // -----------------------------------------------------------------
+        // Initialization
+        // -----------------------------------------------------------------
+        async function init() {
+            // Fetch version
+            try {
+                const res = await fetch(`${API_BASE}/api/version`);
+                if (res.ok) {
+                    const data = await res.json();
+                    versionLabel.textContent = `v${data.version}`;
+                }
+            } catch {}
+
+            // Load saved config and auto-reconnect
+            try {
+                const res = await fetch(`${API_BASE}/api/config`);
+                if (res.ok) {
+                    const config = await res.json();
+                    if (config.last_channel) {
+                        channelInput.value = config.last_channel;
+                    }
+                }
+            } catch {}
+
+            // Start status polling
+            startStatusPolling();
+
+            // Check for updates silently on startup
+            setTimeout(() => checkForUpdates(false), 2000);
+
+            // Handle #check-update hash (from tray menu)
+            if (window.location.hash === '#check-update') {
+                setTimeout(() => checkForUpdates(true), 500);
+                history.replaceState(null, '', window.location.pathname);
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Channel Connection
+        // -----------------------------------------------------------------
+        async function handleConnect() {
+            const channel = channelInput.value.trim().toLowerCase();
+            if (!channel) {
+                showToast('Please enter a channel username', 'error');
+                channelInput.focus();
+                return;
+            }
+
+            isConnecting = true;
+            connectBtn.disabled = true;
+            connectBtn.textContent = 'Connecting...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/set-channel`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channel }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                showToast(`Connecting to ${channel}...`, 'success');
+            } catch (err) {
+                showToast(`Connection failed: ${err.message}`, 'error');
+            } finally {
+                isConnecting = false;
+                connectBtn.disabled = false;
+                connectBtn.textContent = 'Connect';
+            }
+        }
+
+        channelInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleConnect();
+        });
+
+        // -----------------------------------------------------------------
+        // Status Polling
+        // -----------------------------------------------------------------
+        function startStatusPolling() {
+            if (statusPollTimer) clearInterval(statusPollTimer);
+            pollStatus();
+            statusPollTimer = setInterval(pollStatus, STATUS_POLL_MS);
+        }
+
+        async function pollStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/api/status`);
+                if (!res.ok) throw new Error();
+                updateStatusUI(await res.json());
+            } catch {
+                updateStatusUI(null);
+            }
+        }
+
+        function updateStatusUI(data) {
+            if (!data) {
+                statusDot.className = 'w-3 h-3 rounded-full bg-red-500 transition-colors duration-500';
+                statusText.textContent = 'Worker offline';
+                statusText.className = 'text-sm font-semibold text-red-400';
+                bufferInfo.classList.add('hidden');
+                uptimeInfo.classList.add('hidden');
+                clipBtns.forEach(b => b.disabled = true);
+                return;
+            }
+            if (data.error && !data.recording) {
+                statusDot.className = 'w-3 h-3 rounded-full bg-amber-500 transition-colors duration-500';
+                statusText.textContent = data.error.length > 60 ? data.error.slice(0, 60) + '…' : data.error;
+                statusText.className = 'text-sm font-semibold text-amber-400';
+                bufferInfo.classList.add('hidden');
+                uptimeInfo.classList.add('hidden');
+                clipBtns.forEach(b => b.disabled = true);
+                return;
+            }
+            if (data.recording) {
+                statusDot.className = 'w-3 h-3 rounded-full bg-kick status-live transition-colors duration-500';
+                statusText.textContent = `Recording: ${data.channel}`;
+                statusText.className = 'text-sm font-semibold text-kick';
+                bufferInfo.classList.remove('hidden');
+                bufferSeconds.textContent = `${data.buffer_seconds}s`;
+                uptimeInfo.classList.remove('hidden');
+                uptimeDisplay.textContent = formatUptime(data.uptime_seconds);
+                const buf = data.buffer_seconds;
+                $('clip-60-btn').disabled = buf < 30;
+                $('clip-120-btn').disabled = buf < 60;
+                $('clip-280-btn').disabled = buf < 140;
+            } else {
+                statusDot.className = 'w-3 h-3 rounded-full bg-gray-600 transition-colors duration-500';
+                statusText.textContent = data.channel ? `Idle: ${data.channel}` : 'Not connected';
+                statusText.className = 'text-sm font-semibold text-gray-400';
+                bufferInfo.classList.add('hidden');
+                uptimeInfo.classList.add('hidden');
+                clipBtns.forEach(b => b.disabled = true);
+            }
+        }
+
+        function formatUptime(seconds) {
+            if (!seconds || seconds < 0) return '0s';
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return m > 0 ? `${m}m ${s}s` : `${s}s`;
+        }
+
+        // -----------------------------------------------------------------
+        // Clip Modal
+        // -----------------------------------------------------------------
+        function openClipModal(duration) {
+            pendingDuration = duration;
+            modalDurLabel.textContent = `Clipping last ${duration} seconds`;
+            clipTitleInput.value = '';
+            clipModal.classList.remove('hidden');
+            clipModal.classList.add('flex');
+            setTimeout(() => clipTitleInput.focus(), 100);
+        }
+
+        function closeClipModal() {
+            clipModal.classList.add('hidden');
+            clipModal.classList.remove('flex');
+            pendingDuration = null;
+        }
+
+        clipModal.addEventListener('click', (e) => {
+            if (e.target === clipModal) closeClipModal();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !clipModal.classList.contains('hidden')) closeClipModal();
+        });
+
+        clipTitleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitClip();
+        });
+
+        // -----------------------------------------------------------------
+        // Clip Creation
+        // -----------------------------------------------------------------
+        async function submitClip() {
+            const title = clipTitleInput.value.trim();
+            if (!title) {
+                clipTitleInput.classList.add('border-red-500/50');
+                clipTitleInput.focus();
+                setTimeout(() => clipTitleInput.classList.remove('border-red-500/50'), 1500);
+                return;
+            }
+            if (!pendingDuration) return;
+
+            const duration = pendingDuration;
+            closeClipModal();
+            showLoading(true, 'Creating Clip...', 'Slicing video from buffer');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/create-clip`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ duration, title }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                const sizeMB = (data.size_bytes / 1024 / 1024).toFixed(1);
+                showToast(`Clip saved! ${data.filename} (${sizeMB} MB)`, 'success', 6000);
+            } catch (err) {
+                showToast(`Clip failed: ${err.message}`, 'error', 6000);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Update System
+        // -----------------------------------------------------------------
+        async function checkForUpdates(showFeedback = false) {
+            if (showFeedback) {
+                $('check-update-btn').classList.add('text-kick');
+            }
+            try {
+                const res = await fetch(`${API_BASE}/api/check-update`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                if (data.update_available) {
+                    updateInfo = data;
+                    showUpdateBanner(data);
+                    if (showFeedback) {
+                        showToast(`Update available: v${data.latest_version}`, 'success');
+                    }
+                } else if (showFeedback) {
+                    showToast('You\'re on the latest version!', 'success');
+                }
+            } catch (err) {
+                if (showFeedback) {
+                    showToast(`Update check failed: ${err.message}`, 'error');
+                }
+            } finally {
+                if (showFeedback) {
+                    $('check-update-btn').classList.remove('text-kick');
+                }
+            }
+        }
+
+        function showUpdateBanner(data) {
+            $('update-version-label').textContent = `v${data.latest_version}`;
+            const notesEl = $('update-notes-short');
+            if (data.release_name) {
+                notesEl.textContent = `— ${data.release_name}`;
+                notesEl.classList.remove('hidden');
+            }
+            updateBanner.classList.remove('hidden');
+            mainContainer.classList.add('pt-12');
+        }
+
+        function dismissUpdateBanner() {
+            updateBanner.classList.add('hidden');
+            mainContainer.classList.remove('pt-12');
+        }
+
+        async function applyUpdate() {
+            const btn = $('update-now-btn');
+            btn.disabled = true;
+            btn.textContent = 'Updating...';
+
+            showLoading(true, 'Downloading Update...', 'This may take a moment');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/update`, { method: 'POST' });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                showLoading(true, 'Restarting...', 'The app will reload automatically');
+                showToast('Update installed! Restarting...', 'success', 10000);
+
+                // Wait for server to come back up after restart
+                setTimeout(async () => {
+                    for (let i = 0; i < 30; i++) {
+                        try {
+                            const check = await fetch(`${API_BASE}/api/version`, { signal: AbortSignal.timeout(2000) });
+                            if (check.ok) {
+                                window.location.reload();
+                                return;
+                            }
+                        } catch {}
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
+                    showLoading(false);
+                    showToast('Restart timed out. Please reopen the app.', 'error');
+                }, 3000);
+            } catch (err) {
+                showLoading(false);
+                showToast(`Update failed: ${err.message}`, 'error', 8000);
+                btn.disabled = false;
+                btn.textContent = 'Update Now';
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Loading Overlay
+        // -----------------------------------------------------------------
+        function showLoading(show, title, subtitle) {
+            if (show) {
+                if (title) loadingText.textContent = title;
+                if (subtitle) loadingSubtext.textContent = subtitle;
+                loadingOverlay.classList.remove('hidden');
+                loadingOverlay.classList.add('flex');
+            } else {
+                loadingOverlay.classList.add('hidden');
+                loadingOverlay.classList.remove('flex');
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Toast Notifications
+        // -----------------------------------------------------------------
+        function showToast(message, type = 'success', duration = 4000) {
+            const toast = document.createElement('div');
+            const isError = type === 'error';
+            toast.className = `pointer-events-auto glass-strong rounded-2xl p-4 pr-5 min-w-[300px] max-w-[420px] shadow-2xl shadow-black/40 animate-slide-in flex items-start gap-3 relative overflow-hidden`;
+            const iconColor = isError ? 'text-red-400' : 'text-kick';
+            const iconBg = isError ? 'bg-red-500/10' : 'bg-kick/10';
+            const progressColor = isError ? 'bg-red-500/50' : 'bg-kick/40';
+            toast.innerHTML = `
+                <div class="w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0 mt-0.5">
+                    ${isError
+                        ? `<svg class="w-4 h-4 ${iconColor}" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>`
+                        : `<svg class="w-4 h-4 ${iconColor}" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`
+                    }
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-bold uppercase tracking-wider ${isError ? 'text-red-400' : 'text-kick'} mb-0.5">${isError ? 'Error' : 'Success'}</p>
+                    <p class="text-sm text-gray-300 leading-snug break-words">${escapeHtml(message)}</p>
+                </div>
+                <button onclick="dismissToast(this.parentElement)" class="text-gray-600 hover:text-gray-400 transition-colors flex-shrink-0 mt-0.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                </button>
+                <div class="absolute bottom-0 left-0 h-0.5 ${progressColor} toast-progress" style="--duration: ${duration}ms"></div>
+            `;
+            toastContainer.appendChild(toast);
+            toast._timer = setTimeout(() => dismissToast(toast), duration);
+        }
+
+        function dismissToast(toast) {
+            if (!toast || !toast.parentElement) return;
+            clearTimeout(toast._timer);
+            toast.style.animation = 'slideOut 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards';
+            setTimeout(() => toast.remove(), 300);
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // -----------------------------------------------------------------
+        // Boot
+        // -----------------------------------------------------------------
+        init();
+    </script>
+</body>
+</html>
