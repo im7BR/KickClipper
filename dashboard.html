@@ -170,6 +170,7 @@
                     </svg>
                     <span class="text-surface-900 text-sm font-bold">
                         Update available: <span id="update-version-label">v0.0.0</span>
+                        <button onclick="showUpdateDetailsModal()" class="underline ml-2 text-xs font-semibold hover:text-surface-800 transition-colors">What's New</button>
                     </span>
                     <span id="update-notes-short" class="text-surface-900/70 text-xs font-medium hidden sm:inline truncate max-w-[200px]"></span>
                 </div>
@@ -338,6 +339,37 @@
                     class="flex-1 py-3 px-4 rounded-xl bg-surface-700 text-gray-400 font-semibold text-sm hover:bg-surface-600 hover:text-gray-300 transition-all duration-200">Cancel</button>
                 <button id="modal-submit-btn" onclick="submitClip()"
                     class="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-kick-dark to-kick text-surface-900 font-bold text-sm hover:shadow-lg hover:shadow-kick/25 active:scale-[0.97] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed">Create Clip</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- Update Details Modal (hidden by default) -->
+    <!-- ================================================================== -->
+    <div id="update-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+        <div class="glass-strong rounded-3xl w-full max-w-lg mx-4 overflow-hidden animate-modal-in shadow-2xl shadow-black/50 border border-kick/10 flex flex-col max-h-[80vh]">
+            <!-- Header -->
+            <div class="p-6 border-b border-surface-500/30 flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-bold bg-gradient-to-r from-kick to-kick-light bg-clip-text text-transparent">New Update Available!</h3>
+                    <p id="update-modal-version" class="text-xs text-gray-400 font-mono mt-1">Version v1.0.0</p>
+                </div>
+                <button onclick="closeUpdateModal()" class="text-gray-500 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <!-- Body (Scrollable) -->
+            <div id="update-modal-body" class="p-6 overflow-y-auto text-sm text-gray-300 space-y-3 font-sans leading-relaxed">
+                <!-- Changelog content loaded dynamically -->
+            </div>
+            <!-- Footer -->
+            <div class="p-6 border-t border-surface-500/30 bg-surface-900/40 flex items-center justify-end gap-3">
+                <button onclick="closeUpdateModal()" class="px-5 py-2.5 bg-surface-700 hover:bg-surface-600 text-white rounded-xl text-xs font-bold transition-all">
+                    Close
+                </button>
+                <button id="update-modal-btn" onclick="applyUpdateFromModal()" class="px-5 py-2.5 bg-gradient-to-r from-kick-dark to-kick text-surface-900 rounded-xl text-xs font-bold hover:shadow-lg hover:shadow-kick/25 transition-all active:scale-95">
+                    Update Now
+                </button>
             </div>
         </div>
     </div>
@@ -769,6 +801,73 @@
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
+        }
+
+        // -----------------------------------------------------------------
+        // Update Details Modal
+        // -----------------------------------------------------------------
+        function showUpdateDetailsModal() {
+            if (!updateInfo) return;
+            $('update-modal-version').textContent = `Version v${updateInfo.latest_version} ${updateInfo.release_name ? '— ' + updateInfo.release_name : ''}`;
+            $('update-modal-body').innerHTML = renderMarkdown(updateInfo.release_notes);
+            $('update-modal').classList.remove('hidden');
+            $('update-modal').classList.add('flex');
+        }
+
+        function closeUpdateModal() {
+            $('update-modal').classList.add('hidden');
+            $('update-modal').classList.remove('flex');
+        }
+
+        function applyUpdateFromModal() {
+            closeUpdateModal();
+            applyUpdate();
+        }
+
+        function renderMarkdown(md) {
+            if (!md) return '<p class="text-gray-500 italic">No release notes provided.</p>';
+            
+            // Escape HTML first to prevent XSS
+            let html = escapeHtml(md);
+            
+            // Bold: **text** -> <strong>text</strong>
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Headers: # Header -> <h4 class="text-white font-bold text-sm mt-3 mb-1 first:mt-0">Header</h4>
+            html = html.replace(/^#+\s+(.*?)$/gm, '<h4 class="text-white font-bold text-sm mt-3 mb-1 first:mt-0">$1</h4>');
+            
+            // Bullet points: - item or * item -> <li class="ml-5 list-disc text-gray-300 my-1">item</li>
+            html = html.replace(/^\s*[-*]\s+(.*?)$/gm, '<li class="ml-5 list-disc text-gray-300 my-1">$1</li>');
+            
+            // Paragraphs and list groups
+            const lines = html.split('\n');
+            let output = '';
+            let inList = false;
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+                
+                if (line.startsWith('<li')) {
+                    if (!inList) {
+                        output += '<ul class="space-y-1 my-2">';
+                        inList = true;
+                    }
+                    output += line;
+                } else {
+                    if (inList) {
+                        output += '</ul>';
+                        inList = false;
+                    }
+                    if (line.startsWith('<h4')) {
+                        output += line;
+                    } else {
+                        output += `<p class="my-2">${line}</p>`;
+                    }
+                }
+            }
+            if (inList) output += '</ul>';
+            
+            return output;
         }
 
         // -----------------------------------------------------------------

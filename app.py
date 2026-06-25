@@ -36,14 +36,25 @@ DASHBOARD_URL = f"http://{HOST}:{PORT}"
 def start_server():
     """Start the uvicorn server in the current thread."""
     import uvicorn
-    uvicorn.run(
-        "worker:app",
-        host=HOST,
-        port=PORT,
-        log_level="info",
-        # Disable reload in production (frozen exe)
-        reload=not getattr(sys, "frozen", False),
-    )
+    if getattr(sys, "frozen", False):
+        # In compiled mode, import worker directly so PyInstaller collects it
+        from worker import app as fastapi_app
+        uvicorn.run(
+            fastapi_app,
+            host=HOST,
+            port=PORT,
+            log_level="info",
+            reload=False,
+        )
+    else:
+        # In dev mode, use string to allow hot-reloads
+        uvicorn.run(
+            "worker:app",
+            host=HOST,
+            port=PORT,
+            log_level="info",
+            reload=True,
+        )
 
 
 def wait_for_server(timeout=15):

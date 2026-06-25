@@ -31,6 +31,9 @@ from pydantic import BaseModel, Field
 # Configuration
 # ---------------------------------------------------------------------------
 
+import streamlink
+import imageio_ffmpeg
+
 # Use environment vars set by app.py when running as frozen exe, else use file location
 BASE_DIR = Path(os.environ.get("CLIPPER_BASE_DIR", Path(__file__).resolve().parent))
 BUNDLE_DIR = Path(os.environ.get("CLIPPER_BUNDLE_DIR", Path(__file__).resolve().parent))
@@ -41,47 +44,9 @@ SEGMENT_DURATION = 10          # seconds per .ts segment
 MAX_BUFFER_AGE = 310           # delete segments older than this (300 + grace)
 CLEANUP_INTERVAL = 10          # run cleanup every N seconds
 
+# Resolve the bundled FFmpeg executable path
+FFMPEG_CMD = imageio_ffmpeg.get_ffmpeg_exe()
 
-def _resolve_executable(name: str) -> str:
-    """
-    Resolve the full path to an executable. On Windows, pip-installed scripts
-    often land in a Scripts/ directory that isn't on the current shell's PATH.
-    We search: current PATH → Python Scripts dir → system+user PATH env vars.
-    """
-    # 1. Try current PATH
-    found = shutil.which(name)
-    if found:
-        return found
-
-    # 2. Try the Python Scripts directory (where pip installs console_scripts)
-    scripts_dir = Path(sys.executable).parent / "Scripts"
-    for ext in ("", ".exe", ".cmd", ".bat"):
-        candidate = scripts_dir / f"{name}{ext}"
-        if candidate.is_file():
-            return str(candidate)
-
-    # 3. Try refreshed system + user PATH (Windows: picks up winget installs)
-    if os.name == "nt":
-        try:
-            machine_path = os.environ.get("Path", "")
-            refreshed = subprocess.check_output(
-                ["powershell", "-NoProfile", "-Command",
-                 '[System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + '
-                 '[System.Environment]::GetEnvironmentVariable("Path","User")'],
-                text=True, timeout=5
-            ).strip()
-            found = shutil.which(name, path=refreshed)
-            if found:
-                return found
-        except Exception:
-            pass
-
-    # 4. Fallback: return bare name and hope for the best
-    return name
-
-
-STREAMLINK_CMD = _resolve_executable("streamlink")
-FFMPEG_CMD = _resolve_executable("ffmpeg")
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -100,8 +65,6 @@ log = logging.getLogger("clipper")
 
 BUFFER_DIR.mkdir(exist_ok=True)
 CLIPS_DIR.mkdir(exist_ok=True)
-
-log.info("Resolved streamlink: %s", STREAMLINK_CMD)
 
 # ---------------------------------------------------------------------------
 # Config Persistence
@@ -216,11 +179,8 @@ def get_buffer_seconds() -> float:
 
 async def _run_capture(channel: str):
     """
-    Launch streamlink → ffmpeg pipeline using subprocess.Popen.
-
-    We use regular Popen (not asyncio subprocesses) because OS-level pipe
-    file descriptors are needed to connect streamlink's stdout to ffmpeg's
-    stdin. The blocking wait is offloaded to a thread.
+    Resolve HLS stream URL using streamlink library programmatically
+    and launch ffmpeg to capture it in a background thread.
     """
     state.error = None
     state.recording = False
@@ -228,44 +188,29 @@ async def _run_capture(channel: str):
     log.info("Resolving stream for channel: %s", channel)
 
     try:
-        # -----------------------------------------------------------
-        # Step 1: Launch streamlink
-        # -----------------------------------------------------------
-        streamlink_args = [
-            STREAMLINK_CMD,
-            f"https://kick.com/{channel}",
-            "best",
-            "--stdout",
-            "--force",
-            "--loglevel", "warning",
-        ]
-
-        log.info("Starting streamlink: %s", " ".join(streamlink_args))
-
-        sl_proc = subprocess.Popen(
-            streamlink_args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        # Give streamlink a moment to fail fast if channel is invalid
-        await asyncio.sleep(4)
-        ret = sl_proc.poll()
-        if ret is not None:
-            stderr_out = sl_proc.stderr.read().decode(errors="replace").strip()
-            state.error = f"Streamlink failed: {stderr_out or 'channel not live'}"
+        # Use streamlink library API
+        session = streamlink.Streamlink()
+        # Set options for Kick/HLS compatibility
+        session.set_option("http-headers", "User-Agent=Mozilla/5.0")
+        
+        # We wrap session.streams in to_thread because it blocks on HTTP request
+        streams = await asyncio.to_thread(session.streams, f"https://kick.com/{channel}")
+        
+        if not streams or "best" not in streams:
+            state.error = "Channel is offline or not found"
             log.error(state.error)
             return
 
-        # -----------------------------------------------------------
-        # Step 2: Launch ffmpeg, piped from streamlink's stdout
-        # -----------------------------------------------------------
+        hls_url = streams["best"].url
+        log.info("Resolved HLS URL: %s", hls_url[:80] + "...")
+
+        # Launch ffmpeg
         segment_pattern = str(BUFFER_DIR / "segment_%06d.ts")
         ffmpeg_args = [
             FFMPEG_CMD,
             "-hide_banner",
             "-loglevel", "warning",
-            "-i", "pipe:0",
+            "-i", hls_url,
             "-c", "copy",
             "-f", "segment",
             "-segment_time", str(SEGMENT_DURATION),
@@ -275,41 +220,29 @@ async def _run_capture(channel: str):
             segment_pattern,
         ]
 
-        log.info("Starting ffmpeg segmenter")
+        log.info("Starting ffmpeg capture from direct HLS URL")
 
         ff_proc = subprocess.Popen(
             ffmpeg_args,
-            stdin=sl_proc.stdout,      # real OS pipe fd
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
         )
 
-        # Allow streamlink to receive SIGPIPE if ffmpeg dies
-        sl_proc.stdout.close()
-
-        state._capture_proc = sl_proc
         state._ffmpeg_proc = ff_proc
         state.recording = True
         state.started_at = time.time()
         log.info("Recording started for channel: %s", channel)
 
-        # -----------------------------------------------------------
-        # Step 3: Wait for ffmpeg to exit (in a thread to stay async)
-        # -----------------------------------------------------------
+        # Wait for ffmpeg to exit
         await asyncio.to_thread(ff_proc.wait)
 
         state.recording = False
-        if ff_proc.returncode != 0:
+        if ff_proc.returncode != 0 and ff_proc.returncode != -15 and ff_proc.returncode != 1:  # ignore normal shutdown signals/termination codes
             stderr_out = ff_proc.stderr.read().decode(errors="replace")[:500]
             state.error = f"ffmpeg exited with code {ff_proc.returncode}"
             log.error("%s: %s", state.error, stderr_out)
         else:
             log.info("ffmpeg exited cleanly")
-
-        # Clean up streamlink
-        if sl_proc.poll() is None:
-            sl_proc.terminate()
-            sl_proc.wait(timeout=5)
 
     except asyncio.CancelledError:
         log.info("Capture task cancelled")
@@ -321,23 +254,21 @@ async def _run_capture(channel: str):
         log.exception("Capture error")
     finally:
         state.recording = False
-        state._capture_proc = None
         state._ffmpeg_proc = None
 
 
 def _kill_procs():
-    """Terminate any running streamlink/ffmpeg processes."""
-    for proc in (state._ffmpeg_proc, state._capture_proc):
-        if proc and proc.poll() is None:
+    """Terminate any running ffmpeg processes."""
+    proc = state._ffmpeg_proc
+    if proc and proc.poll() is None:
+        try:
+            proc.terminate()
+            proc.wait(timeout=3)
+        except Exception:
             try:
-                proc.terminate()
-                proc.wait(timeout=3)
+                proc.kill()
             except Exception:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-    state._capture_proc = None
+                pass
     state._ffmpeg_proc = None
 
 

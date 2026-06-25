@@ -5,3 +5,4 @@ requests
 pystray
 Pillow
 pyinstaller
+imageio-ffmpeg
