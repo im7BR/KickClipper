@@ -1,17 +1,16 @@
 """
-Kick Clipper — Desktop Application Entry Point
-================================================
-Launches the FastAPI backend server, opens the dashboard in the default
-browser, and creates a system tray icon for managing the app lifecycle.
+Kick Clipper — Standalone Native Desktop App
+============================================
+Launches the FastAPI backend server, and opens a native desktop window
+rendering the Moderator Dashboard using pywebview.
 """
 
 import multiprocessing
 import os
-import signal
 import sys
 import threading
 import time
-import webbrowser
+import webview
 
 # Handle PyInstaller frozen executable paths
 if getattr(sys, "frozen", False):
@@ -105,119 +104,49 @@ def wait_for_server(timeout=15):
     return False
 
 
-def open_browser():
-    """Open the dashboard in the default browser after server is ready."""
-    if wait_for_server():
-        webbrowser.open(DASHBOARD_URL)
-    else:
-        print("Warning: Server did not start in time. Open manually:", DASHBOARD_URL)
-
-
-def run_with_tray():
-    """Run the app with a system tray icon (if pystray is available)."""
-    try:
-        import pystray
-        from PIL import Image, ImageDraw
-    except ImportError:
-        print("pystray/Pillow not available — running without system tray.")
-        run_without_tray()
-        return
-
-    # Create a simple tray icon (green circle with K)
-    def create_icon_image():
-        size = 64
-        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        # Green circle background
-        draw.ellipse([2, 2, size - 2, size - 2], fill=(83, 252, 24, 255))
-        # K letter in dark
-        try:
-            from PIL import ImageFont
-            font = ImageFont.truetype("arial.ttf", 32)
-        except Exception:
-            font = ImageFont.load_default()
-        draw.text((size // 2, size // 2), "K", fill=(10, 10, 15, 255),
-                   font=font, anchor="mm")
-        return img
-
-    server_thread = None
-    icon = None
-
-    def on_open(icon_ref, item):
-        webbrowser.open(DASHBOARD_URL)
-
-    def on_quit(icon_ref, item):
-        icon_ref.stop()
-        os._exit(0)
-
-    def on_check_update(icon_ref, item):
-        webbrowser.open(f"{DASHBOARD_URL}#check-update")
-
-    # Build the tray menu
-    menu = pystray.Menu(
-        pystray.MenuItem("Open Dashboard", on_open, default=True),
-        pystray.MenuItem("Check for Updates", on_check_update),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Quit", on_quit),
-    )
-
-    # Start the server in a background thread
-    server_thread = threading.Thread(target=start_server, daemon=True)
-    server_thread.start()
-
-    # Open browser after a short delay
-    browser_thread = threading.Thread(target=open_browser, daemon=True)
-    browser_thread.start()
-
-    print(f"Kick Clipper is running. Dashboard: {DASHBOARD_URL}")
-
-    try:
-        icon = pystray.Icon(
-            name="KickClipper",
-            icon=create_icon_image(),
-            title="Kick Clipper",
-            menu=menu,
-        )
-        print("Look for the tray icon to manage the app.")
-        icon.run()
-    except Exception as e:
-        print(f"System tray failed to initialize: {e}")
-        print("Running in background loop (Press Ctrl+C to exit).")
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\nShutting down...")
-            sys.exit(0)
-
-
-def run_without_tray():
-    """Fallback: run without system tray (console mode)."""
-    server_thread = threading.Thread(target=start_server, daemon=True)
-    server_thread.start()
-
-    open_browser()
-
-    print(f"\nKick Clipper is running. Dashboard: {DASHBOARD_URL}")
-    print("Press Ctrl+C to quit.\n")
-
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\nShutting down...")
-        sys.exit(0)
-
-
 def main():
     # Needed for PyInstaller on Windows
     multiprocessing.freeze_support()
 
     print("=" * 50)
-    print("  Kick Clipper — Starting...")
+    print("  Kick Clipper — Starting native window...")
     print("=" * 50)
 
-    run_with_tray()
+    # Start FastAPI server in a background thread
+    server_thread = threading.Thread(target=start_server, daemon=True)
+    server_thread.start()
+
+    # Wait for server to start before launching the window
+    if wait_for_server():
+        # Open a native desktop GUI window displaying our dashboard served locally
+        webview.create_window(
+            title="Kick Clipper",
+            url=DASHBOARD_URL,
+            width=900,
+            height=780,
+            resizable=True,
+            min_size=(750, 650),
+        )
+        # Start the GUI event loop (this blocks until the window is closed)
+        webview.start()
+        
+        # Once the window is closed, cleanly shutdown the background processes and exit
+        print("Window closed. Shutting down application...")
+        os._exit(0)
+    else:
+        print("Error: Local backend server failed to start. Exiting.")
+        if getattr(sys, "frozen", False):
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(
+                    0, 
+                    "Error: The backend server did not start in time. The application will close.", 
+                    "Kick Clipper — Timeout", 
+                    0x10
+                )
+            except Exception:
+                pass
+        sys.exit(1)
 
 
 if __name__ == "__main__":

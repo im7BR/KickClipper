@@ -2,7 +2,6 @@ fastapi
 uvicorn[standard]
 streamlink
 requests
-pystray
-Pillow
 pyinstaller
 imageio-ffmpeg
+pywebview

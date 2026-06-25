@@ -191,10 +191,19 @@ async def _run_capture(channel: str):
         # Use streamlink library API
         session = streamlink.Streamlink()
         # Set options for Kick/HLS compatibility
-        session.set_option("http-headers", "User-Agent=Mozilla/5.0")
+        session.set_option("http-headers", "User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        session.set_option("http-timeout", 10.0)
         
-        # We wrap session.streams in to_thread because it blocks on HTTP request
-        streams = await asyncio.to_thread(session.streams, f"https://kick.com/{channel}")
+        # Wrap the blocking streams resolution in wait_for to prevent infinite hanging
+        try:
+            streams = await asyncio.wait_for(
+                asyncio.to_thread(session.streams, f"https://kick.com/{channel}"),
+                timeout=15.0
+            )
+        except asyncio.TimeoutError:
+            state.error = "Connection timed out resolving stream. Please check your internet or try again."
+            log.error(state.error)
+            return
         
         if not streams or "best" not in streams:
             state.error = "Channel is offline or not found"
