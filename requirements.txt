@@ -5,3 +5,5 @@ requests
 pyinstaller
 imageio-ffmpeg
 pywebview
+pefile
+pywin32

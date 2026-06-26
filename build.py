@@ -58,6 +58,7 @@ def build():
         "--add-data", "dashboard.html;.",
         "--add-data", "dist/updater.exe;.",
         "--icon", "logo.ico",
+        "--version-file", "file_version_info.txt",
         "--collect-all", "curl_cffi",
         "--hidden-import", "_cffi_backend",
         "--collect-all", "imageio_ffmpeg",

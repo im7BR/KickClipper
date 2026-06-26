@@ -39,8 +39,13 @@ jobs:
           body: |
             # 🟢 Kick Clipper ${{ github.ref_name }}
             
+            > [!IMPORTANT]
+            > **Windows SmartScreen Warning**: Because this application is a custom self-compiled executable and not signed with an expensive Microsoft developer certificate, Windows Defender SmartScreen will show a warning saying "Windows protected your PC" on first launch.
+            > **To bypass this and run the app**: Click on **"More info"** and then click the **"Run anyway"** button.
+            
             ### 🚀 What's New:
-            - **Merged Updater into Main App**: You now only need to download a single file: `KickClipper.exe`. The updater is fully built-in and extracts itself dynamically to perform updates automatically. No more `updater.exe not found` errors!
+            - **Metadata & Icon Embedding**: Added full PE metadata (Description, Version, Company, Copyright) to the executable details and optimized icon embedding.
+            - **Merged Updater into Main App**: You now only need to download a single file: `KickClipper.exe`. The updater is fully built-in and extracts itself dynamically to perform updates automatically.
             - **Fixed stuck CMD console window**: Subprocesses (like FFmpeg) are now spawned invisibly in the background. No more empty black console windows popping up on your screen when you connect to a streamer!
             
             ---
@@ -58,7 +63,7 @@ jobs:
             
             ## 📥 How to Run
             1. Download `KickClipper.exe` from this release.
-            2. Run `KickClipper.exe` to launch the application.
+            2. Run `KickClipper.exe` to launch the application. (Bypass SmartScreen by clicking *More info* -> *Run anyway*).
             3. Select a save location for your clips.
             4. Enter a Kick channel username and click Connect!
             
