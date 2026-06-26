@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-streamlink
+curl_cffi
 requests
 pyinstaller
 imageio-ffmpeg

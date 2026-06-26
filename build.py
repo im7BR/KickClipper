@@ -23,13 +23,23 @@ def build():
 
     clean_dirs()
 
+    # Generate logo.ico if it doesn't exist
+    if not Path("logo.ico").exists():
+        try:
+            from generate_icon import generate_ico
+            generate_ico()
+        except Exception as e:
+            print(f"Warning: Failed to auto-generate logo.ico: {e}")
+
     # 1. Build updater.exe (console tool to do file swap)
     print("\n--- Building updater.exe ---")
     updater_cmd = [
         sys.executable, "-m", "PyInstaller",
         "--onefile",
         "--console",
+        "--clean",
         "--name", "updater",
+        "--icon", "logo.ico",
         "updater.py"
     ]
     print("Running:", " ".join(updater_cmd))
@@ -45,8 +55,13 @@ def build():
         sys.executable, "-m", "PyInstaller",
         "--onefile",
         "--noconsole",
+        "--clean",
         "--name", "KickClipper",
         "--add-data", add_data_flag,
+        "--icon", "logo.ico",
+        "--collect-all", "curl_cffi",
+        "--hidden-import", "_cffi_backend",
+        "--collect-all", "imageio_ffmpeg",
         "app.py"
     ]
     print("Running:", " ".join(app_cmd))

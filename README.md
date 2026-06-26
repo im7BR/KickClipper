@@ -1,34 +1,37 @@
 # 🟢 Kick Clipper (Desktop App)
 
-A custom, real-time live stream clipping tool designed for **Kick.com** stream moderators and creators. It runs as a lightweight background worker, maintains a rolling 5-minute HLS stream buffer, and provides a stunning, premium web-based Moderator Dashboard with system tray control and a built-in auto-update system via GitHub.
+A custom, real-time live stream clipping tool designed for **Kick.com** stream moderators and creators. It runs as a fully self-contained desktop application with a native GUI interface, maintaining a rolling 5-minute HLS stream buffer and providing a premium Moderator Dashboard.
 
 ---
 
 ## ✨ Features
 
-- **🔄 Rolling 5-Minute Buffer**: Automatically captures HLS streams in 10-second segments. Discards segments older than 5 minutes to keep disk space usage minimal and prevent memory leaks.
-- **⚡ Near-Instant Clipping**: Concat slices without re-encoding (`ffmpeg -c copy`), generating MP4 clips in under 1 second.
-- **💻 Desktop App / System Tray**: Run it as a windowless application managed via the Windows system tray. Double-clicking or selecting options from the tray icon opens the UI.
-- **💾 Auto-Reconnect**: Remembers the last connected streamer and automatically connects on startup.
-- **🚀 One-Click Auto Updates**: Automatically checks for updates on GitHub Releases. Alerts the user via a dashboard banner and handles automatic download, file replacement, and app relaunch.
-- **🧪 Modern UI**: Elegant dark-themed web dashboard with glassmorphism design, real-time status tracking, instant clip naming, and download management.
+- **🔄 Rolling 5-Minute Buffer**: Automatically captures HLS streams in 10-second segments. Discards segments older than 5 minutes to keep disk space usage minimal.
+- **⚡ Near-Instant Clipping**: Concat slices without re-encoding, generating MP4 clips in under 1 second.
+- **💻 Zero Setup Standalone .exe**: Fully bundles all dependencies including FFmpeg. No command-line commands or prerequisites are needed for the end-user.
+- **🌐 Direct Kick API Integration**: Uses `curl_cffi` to bypass Cloudflare protection and query the Kick API directly for live stream HLS URLs — no headless browser or third-party plugins required.
+- **📁 Custom Save Location**: Allows the user to select their desired clips folder. Connection is disabled until a folder is selected to prevent lost streams.
+- **💾 Auto-Reconnect**: Remembers the last connected streamer and automatically reconnects on startup once a save directory is selected.
+- **🚀 One-Click Auto Updates**: Automatically checks for updates on GitHub Releases, displays a change log, and installs the update in a single click.
+- **🧪 Premium UI**: Stunning dark-themed glassmorphism interface, custom application icon, real-time status tracking, and download management.
 
 ---
 
-## 🛠️ Prerequisites
+## 📥 Download & Install
 
-To run or build Kick Clipper, you need the following dependencies installed on your system:
+**For regular users** — just download and run:
 
-1. **FFmpeg** (Must be on system PATH)
-   - Install via Windows Package Manager: `winget install Gyan.FFmpeg`
-   - Or download manually from [ffmpeg.org](https://ffmpeg.org/download.html).
-2. **Streamlink** (Must be on system PATH)
-   - Install via Windows Package Manager: `winget install Streamlink.Streamlink`
-   - Or install via python pip: `pip install streamlink`
+1. Go to the [**Releases**](https://github.com/im7BR/KickClipper/releases) page.
+2. Download `KickClipper.exe` and `updater.exe` from the latest release.
+3. Place both files in the same folder.
+4. Double-click `KickClipper.exe` — done!
+
+> [!IMPORTANT]
+> Keep both `KickClipper.exe` and `updater.exe` in the same directory. The main app uses `updater.exe` to perform automatic self-updates.
 
 ---
 
-## 🚀 How to Run (Development)
+## 🛠️ How to Run (Development)
 
 If running from source code:
 
@@ -36,11 +39,15 @@ If running from source code:
    ```bash
    pip install -r requirements.txt
    ```
-2. **Launch the App**:
+2. **Generate the Icon** (Optional):
+   ```bash
+   python generate_icon.py
+   ```
+3. **Launch the App**:
    ```bash
    python app.py
    ```
-   *This starts the local FastAPI server at `http://127.0.0.1:8000`, displays a system tray icon, and opens the Moderator Dashboard in your default browser.*
+   *This starts the local FastAPI backend server, queries the Kick API for live streams, and launches the native webview GUI window.*
 
 ---
 
@@ -54,11 +61,8 @@ To package Kick Clipper into a standalone Windows executable:
    python build.py
    ```
 3. PyInstaller will compile two files in the `dist/` directory:
-   - **`KickClipper.exe`**: The main executable.
+   - **`KickClipper.exe`**: The main desktop application with its custom icon.
    - **`updater.exe`**: Helper program for managing automatic self-updates.
-
-> [!IMPORTANT]
-> Keep both `KickClipper.exe` and `updater.exe` in the same folder. The main app launches `updater.exe` to perform the file swap during automatic updates.
 
 ---
 
@@ -73,8 +77,22 @@ When you want to publish a new update:
    git tag v1.0.1
    git push origin v1.0.1
    ```
-3. The workflow will automatically compile the code on a Windows environment and attach both `KickClipper.exe` and `updater.exe` to a new release on GitHub.
-4. Existing users will see an update banner in their dashboard on the next startup and can update automatically.
+3. The workflow will automatically compile the code on a Windows environment (bundling all dependencies and the custom icon) and attach both `KickClipper.exe` and `updater.exe` to a new release on GitHub.
+4. Users will see a notification and changelog modal in their dashboard on launch and can upgrade automatically.
+
+---
+
+## 🔧 Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| **Backend** | Python, FastAPI, Uvicorn |
+| **Stream Capture** | FFmpeg (bundled via `imageio-ffmpeg`) |
+| **Kick API Access** | `curl_cffi` (bypasses Cloudflare) |
+| **Desktop GUI** | pywebview (native window) |
+| **Frontend** | HTML, Tailwind CSS, Vanilla JS |
+| **Build System** | PyInstaller |
+| **CI/CD** | GitHub Actions |
 
 ---
 

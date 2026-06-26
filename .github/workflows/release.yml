@@ -44,19 +44,18 @@ jobs:
             ## ✨ Features
             - **🔄 Rolling HLS Buffer**: Automatically captures Kick streams in 10-second segments, keeping a rolling 5-minute buffer and discarding old segments to save disk space.
             - **⚡ Instant Clipping**: Generates MP4 clips from the buffer in under 1 second without re-encoding.
-            - **💻 Standalone Desktop Executable**: Run and manage the application directly from your system tray.
-            - **💾 Auto-Reconnect**: Automatically attempts to reconnect to the last active channel on startup.
+            - **💻 Standalone Desktop Executable**: Everything is bundled — just download and run. No prerequisites needed.
+            - **🌐 Direct Kick API Integration**: Bypasses Cloudflare protection to access Kick streams directly. No headless browser or third-party plugins required.
+            - **📁 Custom Save Location**: Choose where your clips get saved with a native folder picker.
+            - **💾 Auto-Reconnect**: Automatically reconnects to the last active channel on startup.
             - **🚀 One-Click Auto-Updates**: Receive notification of updates and upgrade the application in a single click directly from the dashboard.
-            
-            ## 🛠️ Prerequisites
-            Before running `KickClipper.exe`, ensure the following dependencies are installed and added to your system PATH:
-            - **FFmpeg**: Install via Windows Package Manager: `winget install Gyan.FFmpeg` (or download from [ffmpeg.org](https://ffmpeg.org/download.html))
-            - **Streamlink**: Install via Windows Package Manager: `winget install Streamlink.Streamlink` (or run `pip install streamlink`)
             
             ## 📥 How to Run
             1. Download **both** `KickClipper.exe` and `updater.exe` from this release.
             2. Place both files in the **same directory** on your computer.
-            3. Run `KickClipper.exe` to launch the application. The dashboard will open automatically in your browser.
+            3. Run `KickClipper.exe` to launch the application.
+            4. Select a save location for your clips.
+            5. Enter a Kick channel username and click Connect!
             
             ## 📞 Contact & Support
             If you need help, want to suggest improvements, or have any questions, feel free to reach out:

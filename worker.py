@@ -31,14 +31,13 @@ from pydantic import BaseModel, Field
 # Configuration
 # ---------------------------------------------------------------------------
 
-import streamlink
 import imageio_ffmpeg
+from curl_cffi import requests as cffi_requests
 
 # Use environment vars set by app.py when running as frozen exe, else use file location
 BASE_DIR = Path(os.environ.get("CLIPPER_BASE_DIR", Path(__file__).resolve().parent))
 BUNDLE_DIR = Path(os.environ.get("CLIPPER_BUNDLE_DIR", Path(__file__).resolve().parent))
 BUFFER_DIR = BASE_DIR / "buffer"
-CLIPS_DIR = BASE_DIR / "clips"
 CONFIG_FILE = BASE_DIR / "config.json"
 SEGMENT_DURATION = 10          # seconds per .ts segment
 MAX_BUFFER_AGE = 310           # delete segments older than this (300 + grace)
@@ -57,14 +56,13 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
 )
-log = logging.getLogger("clipper")
+log = logging.getLogger("uvicorn.error")
 
 # ---------------------------------------------------------------------------
 # Ensure directories exist
 # ---------------------------------------------------------------------------
 
 BUFFER_DIR.mkdir(exist_ok=True)
-CLIPS_DIR.mkdir(exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Config Persistence
@@ -78,6 +76,20 @@ def load_config() -> dict:
     except Exception:
         pass
     return {}
+
+
+def get_clips_dir() -> Path | None:
+    """Get the current clips saving directory from configuration."""
+    config = load_config()
+    saved = config.get("clips_dir")
+    if saved:
+        p = Path(saved)
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        except Exception:
+            pass
+    return None
 
 
 def save_config(data: dict):
@@ -100,6 +112,7 @@ class AppState:
     def __init__(self):
         self.channel: str | None = None
         self.recording: bool = False
+        self.connecting: bool = False
         self.error: str | None = None
         self.started_at: float | None = None
         self._capture_proc: subprocess.Popen | None = None
@@ -115,6 +128,9 @@ state = AppState()
 
 class SetChannelRequest(BaseModel):
     channel: str = Field(..., min_length=1, max_length=100)
+
+class SetClipsDirRequest(BaseModel):
+    path: str = Field(..., min_length=1)
 
 class CreateClipRequest(BaseModel):
     duration: int = Field(..., ge=10, le=300)
@@ -177,40 +193,111 @@ def get_buffer_seconds() -> float:
 # Stream Capture
 # ---------------------------------------------------------------------------
 
+def _resolve_kick_hls(channel: str) -> str | None:
+    """
+    Resolve the HLS .m3u8 playback URL for a Kick channel using the Kick API
+    directly via curl_cffi (bypasses Cloudflare). Returns the URL or None.
+    """
+    # Try the livestream-specific endpoint first
+    api_urls = [
+        f"https://kick.com/api/v2/channels/{channel}/livestream",
+        f"https://kick.com/api/v2/channels/{channel}",
+    ]
+
+    for api_url in api_urls:
+        try:
+            log.info("Querying Kick API: %s", api_url)
+            resp = cffi_requests.get(
+                api_url,
+                impersonate="chrome",
+                timeout=15,
+                headers={
+                    "Accept": "application/json",
+                    "Referer": f"https://kick.com/{channel}",
+                },
+            )
+
+            if resp.status_code == 404:
+                log.warning("Channel '%s' not found (404)", channel)
+                return None
+            if resp.status_code == 403:
+                log.warning("Kick API returned 403 for %s, trying next endpoint...", api_url)
+                continue
+            if resp.status_code != 200:
+                log.warning("Kick API returned %d for %s", resp.status_code, api_url)
+                continue
+
+            data = resp.json()
+
+            # Livestream endpoint returns {"data": {"playback_url": "..."}}
+            if isinstance(data, dict) and "data" in data and isinstance(data["data"], dict):
+                playback = data["data"].get("playback_url")
+                if playback and ".m3u8" in playback:
+                    return playback
+                # data is None means channel is offline
+                if data["data"] is None or not playback:
+                    log.info("Channel '%s' is offline (livestream data is empty)", channel)
+                    return None
+
+            # Channel endpoint returns {"playback_url": "...", "livestream": {...}}
+            playback = data.get("playback_url", "")
+            livestream = data.get("livestream")
+
+            if livestream and isinstance(livestream, dict):
+                is_live = livestream.get("is_live", False)
+                if not is_live:
+                    log.info("Channel '%s' is offline (is_live=False)", channel)
+                    return None
+                # Some responses have the URL inside livestream
+                ls_playback = livestream.get("playback_url", "")
+                if ls_playback and ".m3u8" in ls_playback:
+                    return ls_playback
+
+            if playback and ".m3u8" in playback:
+                # Channel has a playback URL but might not be live
+                # Verify the stream is actually live
+                if livestream is None:
+                    log.info("Channel '%s' is offline (no livestream data)", channel)
+                    return None
+                return playback
+
+        except Exception as e:
+            log.warning("Kick API request failed for %s: %s", api_url, e)
+            continue
+
+    return None
+
+
 async def _run_capture(channel: str):
     """
-    Resolve HLS stream URL using streamlink library programmatically
+    Resolve HLS stream URL using Kick API directly via curl_cffi
     and launch ffmpeg to capture it in a background thread.
     """
     state.error = None
     state.recording = False
+    state.connecting = True
 
     log.info("Resolving stream for channel: %s", channel)
 
     try:
-        # Use streamlink library API
-        session = streamlink.Streamlink()
-        # Set options for Kick/HLS compatibility
-        session.set_option("http-headers", "User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        session.set_option("http-timeout", 10.0)
-        
-        # Wrap the blocking streams resolution in wait_for to prevent infinite hanging
+        # Resolve HLS URL from Kick API (blocking call wrapped in thread)
         try:
-            streams = await asyncio.wait_for(
-                asyncio.to_thread(session.streams, f"https://kick.com/{channel}"),
-                timeout=15.0
+            hls_url = await asyncio.wait_for(
+                asyncio.to_thread(_resolve_kick_hls, channel),
+                timeout=20.0,
             )
         except asyncio.TimeoutError:
-            state.error = "Connection timed out resolving stream. Please check your internet or try again."
+            state.error = "Connection timed out. Please check your internet or try again."
             log.error(state.error)
             return
-        
-        if not streams or "best" not in streams:
+        finally:
+            state.connecting = False
+
+        if not hls_url:
             state.error = "Channel is offline or not found"
             log.error(state.error)
             return
 
-        hls_url = streams["best"].url
         log.info("Resolved HLS URL: %s", hls_url[:80] + "...")
 
         # Launch ffmpeg
@@ -229,7 +316,7 @@ async def _run_capture(channel: str):
             segment_pattern,
         ]
 
-        log.info("Starting ffmpeg capture from direct HLS URL")
+        log.info("Starting ffmpeg capture from HLS URL")
 
         ff_proc = subprocess.Popen(
             ffmpeg_args,
@@ -246,7 +333,7 @@ async def _run_capture(channel: str):
         await asyncio.to_thread(ff_proc.wait)
 
         state.recording = False
-        if ff_proc.returncode != 0 and ff_proc.returncode != -15 and ff_proc.returncode != 1:  # ignore normal shutdown signals/termination codes
+        if ff_proc.returncode not in (0, 1, -15):  # ignore normal shutdown signals
             stderr_out = ff_proc.stderr.read().decode(errors="replace")[:500]
             state.error = f"ffmpeg exited with code {ff_proc.returncode}"
             log.error("%s: %s", state.error, stderr_out)
@@ -263,6 +350,7 @@ async def _run_capture(channel: str):
         log.exception("Capture error")
     finally:
         state.recording = False
+        state.connecting = False
         state._ffmpeg_proc = None
 
 
@@ -291,6 +379,7 @@ async def _stop_capture():
             pass
     _kill_procs()
     state.recording = False
+    state.connecting = False
     state.started_at = None
 
 
@@ -360,7 +449,11 @@ async def create_clip(duration: int, title: str) -> Path:
     safe_title = sanitize_filename(title)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     output_name = f"{safe_title}_{timestamp}.mp4"
-    output_path = CLIPS_DIR / output_name
+    
+    clips_dir = get_clips_dir()
+    if not clips_dir:
+        raise HTTPException(status_code=400, detail="Clips directory is not set. Please select a clips folder.")
+    output_path = clips_dir / output_name
 
     # Run ffmpeg concat
     ffmpeg_args = [
@@ -410,20 +503,43 @@ async def api_status():
     segments = get_sorted_segments()
     buffered_seconds = len(segments) * SEGMENT_DURATION
     uptime = round(time.time() - state.started_at, 1) if state.started_at else 0
+    clips_dir = get_clips_dir()
 
     return {
         "channel": state.channel,
         "recording": state.recording,
+        "connecting": state.connecting,
         "error": state.error,
         "buffer_segments": len(segments),
         "buffer_seconds": buffered_seconds,
         "uptime_seconds": uptime,
+        "clips_dir": str(clips_dir.resolve()) if clips_dir else None,
     }
+
+
+@app.post("/api/set-clips-dir")
+async def api_set_clips_dir(req: SetClipsDirRequest):
+    """Set the clips saving directory."""
+    path_str = req.path.strip()
+    if not path_str:
+        raise HTTPException(status_code=400, detail="Path cannot be empty.")
+    p = Path(path_str)
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid folder path or permission denied: {e}")
+    
+    save_config({"clips_dir": str(p.resolve())})
+    return {"ok": True, "clips_dir": str(p.resolve())}
 
 
 @app.post("/api/set-channel")
 async def api_set_channel(req: SetChannelRequest):
     """Set or change the target Kick channel."""
+    clips_dir = get_clips_dir()
+    if not clips_dir:
+        raise HTTPException(status_code=400, detail="Clips directory is not set. Please select a clips folder first.")
+
     channel = req.channel.strip().lower()
 
     # Stop any existing capture
@@ -592,7 +708,7 @@ async def api_apply_update():
 @app.on_event("startup")
 async def on_startup():
     """Start the buffer cleanup loop on server boot."""
-    log.info("Clipper worker starting — buffer: %s, clips: %s", BUFFER_DIR, CLIPS_DIR)
+    log.info("Clipper worker starting — buffer: %s, clips: %s", BUFFER_DIR, get_clips_dir())
     state._cleanup_task = asyncio.create_task(_cleanup_loop())
 
 

@@ -104,6 +104,17 @@ def wait_for_server(timeout=15):
     return False
 
 
+class Api:
+    def select_folder(self):
+        """Open a native folder selection dialog and return the selected path."""
+        window = webview.active_window()
+        if window:
+            result = window.create_file_dialog(webview.FOLDER_DIALOG)
+            if result and len(result) > 0:
+                return result[0]
+        return None
+
+
 def main():
     # Needed for PyInstaller on Windows
     multiprocessing.freeze_support()
@@ -119,6 +130,7 @@ def main():
     # Wait for server to start before launching the window
     if wait_for_server():
         # Open a native desktop GUI window displaying our dashboard served locally
+        api = Api()
         webview.create_window(
             title="Kick Clipper",
             url=DASHBOARD_URL,
@@ -126,6 +138,7 @@ def main():
             height=780,
             resizable=True,
             min_size=(750, 650),
+            js_api=api,
         )
         # Start the GUI event loop (this blocks until the window is closed)
         webview.start()
