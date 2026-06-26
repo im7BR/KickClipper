@@ -35,9 +35,14 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          name: "Beta 1.0"
+          name: "Kick Clipper ${{ github.ref_name }}"
           body: |
-            # 🟢 Kick Clipper (Beta 1.0)
+            # 🟢 Kick Clipper ${{ github.ref_name }}
+            
+            ### 🚀 What's New:
+            - **Fixed stuck CMD console window**: Subprocesses (like FFmpeg) are now spawned invisibly in the background. No more empty black console windows popping up on your screen when you connect to a streamer!
+            
+            ---
             
             A custom, real-time live stream clipping tool designed for **Kick.com** stream moderators and creators.
             

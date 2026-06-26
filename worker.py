@@ -318,10 +318,15 @@ async def _run_capture(channel: str):
 
         log.info("Starting ffmpeg capture from HLS URL")
 
+        creation_flags = 0
+        if sys.platform == "win32":
+            creation_flags = 0x08000000  # CREATE_NO_WINDOW
+
         ff_proc = subprocess.Popen(
             ffmpeg_args,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
+            creationflags=creation_flags,
         )
 
         state._ffmpeg_proc = ff_proc
@@ -471,10 +476,16 @@ async def create_clip(duration: int, title: str) -> Path:
 
     log.info("Creating clip: %s (%d segments, ~%ds)", output_name, len(selected), duration)
 
+    kwargs = {
+        "stdout": asyncio.subprocess.PIPE,
+        "stderr": asyncio.subprocess.PIPE,
+    }
+    if sys.platform == "win32":
+        kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+
     proc = await asyncio.create_subprocess_exec(
         *ffmpeg_args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        **kwargs
     )
     _, stderr = await proc.communicate()
 
