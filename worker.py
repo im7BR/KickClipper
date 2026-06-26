@@ -679,21 +679,31 @@ async def api_apply_update():
         log.info("Update downloaded: %s (%.2f MB)", new_exe_path,
                  new_exe_path.stat().st_size / 1024 / 1024)
 
-        # Find the updater executable (bundled alongside)
+        # Find the updater executable (bundled inside)
         current_exe = Path(sys.executable)
-        updater_exe = current_exe.parent / "updater.exe"
+        bundled_updater = BUNDLE_DIR / "updater.exe"
 
-        if not updater_exe.exists():
-            # Fallback: use python to run updater.py
+        if not bundled_updater.exists():
             raise HTTPException(
                 status_code=500,
-                detail="updater.exe not found. Please update manually."
+                detail="Bundled updater.exe not found inside the application package."
             )
 
-        # Launch the updater as a detached process
-        log.info("Launching updater: %s", updater_exe)
+        # Copy updater to the temp directory so it runs outside the app bundle
+        temp_updater_path = temp_dir / "updater.exe"
+        try:
+            shutil.copy2(bundled_updater, temp_updater_path)
+            log.info("Copied updater to temp path: %s", temp_updater_path)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to copy updater to temp directory: {e}"
+            )
+
+        # Launch the updater as a detached process from the temp directory
+        log.info("Launching updater: %s", temp_updater_path)
         subprocess.Popen(
-            [str(updater_exe), str(new_exe_path), str(current_exe)],
+            [str(temp_updater_path), str(new_exe_path), str(current_exe)],
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
         )
 

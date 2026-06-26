@@ -49,15 +49,14 @@ def build():
     print("\n--- Building KickClipper.exe ---")
     # In Windows PyInstaller, add-data format is "source;dest"
     # dashboard.html will be placed at the root of the temp _MEIPASS folder
-    add_data_flag = "dashboard.html;."
-    
     app_cmd = [
         sys.executable, "-m", "PyInstaller",
         "--onefile",
         "--noconsole",
         "--clean",
         "--name", "KickClipper",
-        "--add-data", add_data_flag,
+        "--add-data", "dashboard.html;.",
+        "--add-data", "dist/updater.exe;.",
         "--icon", "logo.ico",
         "--collect-all", "curl_cffi",
         "--hidden-import", "_cffi_backend",

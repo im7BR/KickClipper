@@ -40,6 +40,7 @@ jobs:
             # 🟢 Kick Clipper ${{ github.ref_name }}
             
             ### 🚀 What's New:
+            - **Merged Updater into Main App**: You now only need to download a single file: `KickClipper.exe`. The updater is fully built-in and extracts itself dynamically to perform updates automatically. No more `updater.exe not found` errors!
             - **Fixed stuck CMD console window**: Subprocesses (like FFmpeg) are now spawned invisibly in the background. No more empty black console windows popping up on your screen when you connect to a streamer!
             
             ---
@@ -56,11 +57,10 @@ jobs:
             - **🚀 One-Click Auto-Updates**: Receive notification of updates and upgrade the application in a single click directly from the dashboard.
             
             ## 📥 How to Run
-            1. Download **both** `KickClipper.exe` and `updater.exe` from this release.
-            2. Place both files in the **same directory** on your computer.
-            3. Run `KickClipper.exe` to launch the application.
-            4. Select a save location for your clips.
-            5. Enter a Kick channel username and click Connect!
+            1. Download `KickClipper.exe` from this release.
+            2. Run `KickClipper.exe` to launch the application.
+            3. Select a save location for your clips.
+            4. Enter a Kick channel username and click Connect!
             
             ## 📞 Contact & Support
             If you need help, want to suggest improvements, or have any questions, feel free to reach out:
@@ -69,6 +69,5 @@ jobs:
             - **Email**: [aymen7br@gmail.com](mailto:aymen7br@gmail.com)
           files: |
             dist/KickClipper.exe
-            dist/updater.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
