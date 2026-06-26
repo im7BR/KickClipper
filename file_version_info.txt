@@ -4,8 +4,8 @@
 # https://docs.microsoft.com/en-us/windows/win32/menurc/vs-fixedfileinfo
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 7, 0),
-    prodvers=(1, 0, 7, 0),
+    filevers=(1, 1, 0, 0),
+    prodvers=(1, 1, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -21,12 +21,12 @@ VSVersionInfo(
         '040904b0',
         [StringStruct('CompanyName', 'StreamClipper'),
         StringStruct('FileDescription', 'Stream Clipper Live Stream Capture'),
-        StringStruct('FileVersion', '1.0.7'),
+        StringStruct('FileVersion', '1.1.0'),
         StringStruct('InternalName', 'StreamClipper'),
         StringStruct('LegalCopyright', 'Copyright (c) 2026 im7BR. All rights reserved.'),
         StringStruct('OriginalFilename', 'StreamClipper.exe'),
         StringStruct('ProductName', 'Stream Clipper'),
-        StringStruct('ProductVersion', '1.0.7')])
+        StringStruct('ProductVersion', '1.1.0')])
       ]
     )
   ]

@@ -120,6 +120,7 @@ class AppState:
         self._ffmpeg_proc: subprocess.Popen | None = None
         self._capture_task: asyncio.Task | None = None
         self._cleanup_task: asyncio.Task | None = None
+        self.custom_recording_started_at: float | None = None
 
 state = AppState()
 
@@ -136,6 +137,9 @@ class SetClipsDirRequest(BaseModel):
 
 class CreateClipRequest(BaseModel):
     duration: int = Field(..., ge=10, le=300)
+    title: str = Field(..., min_length=1, max_length=200)
+
+class CustomRecordStopRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
 
 # ---------------------------------------------------------------------------
@@ -516,6 +520,7 @@ async def _stop_capture():
     state.recording = False
     state.connecting = False
     state.started_at = None
+    state.custom_recording_started_at = None
 
 
 def _clear_buffer():
@@ -536,9 +541,15 @@ async def _cleanup_loop():
         try:
             now = time.time()
             removed = 0
+            
+            # If custom recording is active, do not delete any segments created since it started (minus a 5s grace margin)
+            limit = now - MAX_BUFFER_AGE
+            if state.custom_recording_started_at is not None:
+                limit = min(limit, state.custom_recording_started_at - 5)
+                
             for f in BUFFER_DIR.glob("segment_*.ts"):
                 try:
-                    if now - f.stat().st_mtime > MAX_BUFFER_AGE:
+                    if f.stat().st_mtime < limit:
                         f.unlink()
                         removed += 1
                 except OSError:
@@ -656,6 +667,8 @@ async def api_status():
         "buffer_seconds": buffered_seconds,
         "uptime_seconds": uptime,
         "clips_dir": str(clips_dir.resolve()) if clips_dir else None,
+        "custom_recording_started_at": state.custom_recording_started_at,
+        "custom_recording_active": state.custom_recording_started_at is not None,
     }
 
 
@@ -712,6 +725,108 @@ async def api_stop_capture_endpoint():
     _clear_buffer()
     state.channel = None
     state.platform = "kick"
+    return {"ok": True}
+
+
+@app.post("/api/custom-record/start")
+async def api_custom_record_start():
+    if not state.recording:
+        raise HTTPException(status_code=409, detail="Not currently recording. Connect to a channel first.")
+    if state.custom_recording_started_at is not None:
+        raise HTTPException(status_code=409, detail="Custom recording is already active.")
+    
+    state.custom_recording_started_at = time.time()
+    log.info("Custom recording started at %s", state.custom_recording_started_at)
+    return {"ok": True, "started_at": state.custom_recording_started_at}
+
+
+@app.post("/api/custom-record/stop")
+async def api_custom_record_stop(req: CustomRecordStopRequest):
+    if not state.recording:
+        raise HTTPException(status_code=409, detail="Not currently recording. Connect to a channel first.")
+    if state.custom_recording_started_at is None:
+        raise HTTPException(status_code=409, detail="No custom recording is active.")
+        
+    start_time = state.custom_recording_started_at
+    state.custom_recording_started_at = None  # Reset state early
+    
+    # Get segments modified after start_time (with a 5-second grace margin to capture the first segment fully)
+    segments = get_sorted_segments()
+    selected = [seg for seg in segments if seg.stat().st_mtime >= start_time - 5]
+    
+    if not selected:
+        raise HTTPException(status_code=409, detail="No video segments captured during the recording duration.")
+        
+    # Build concat file list
+    concat_file = BUFFER_DIR / "_concat_list.txt"
+    with open(concat_file, "w", encoding="utf-8") as f:
+        for seg in selected:
+            safe_path = str(seg.resolve()).replace("\\", "/")
+            f.write(f"file '{safe_path}'\n")
+            
+    # Output filename
+    safe_title = sanitize_filename(req.title)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    output_name = f"{safe_title}_{timestamp}.mp4"
+    
+    clips_dir = get_clips_dir()
+    if not clips_dir:
+        raise HTTPException(status_code=400, detail="Clips directory is not set.")
+    output_path = clips_dir / output_name
+    
+    # Run ffmpeg concat
+    ffmpeg_args = [
+        FFMPEG_CMD,
+        "-hide_banner",
+        "-loglevel", "warning",
+        "-y",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", str(concat_file),
+        "-c", "copy",
+        "-movflags", "+faststart",
+        str(output_path),
+    ]
+    
+    log.info("Creating custom record clip: %s (%d segments)", output_name, len(selected))
+    
+    kwargs = {
+        "stdout": asyncio.subprocess.PIPE,
+        "stderr": asyncio.subprocess.PIPE,
+    }
+    if sys.platform == "win32":
+        kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+        
+    proc = await asyncio.create_subprocess_exec(
+        *ffmpeg_args,
+        **kwargs
+    )
+    _, stderr = await proc.communicate()
+    
+    try:
+        concat_file.unlink()
+    except OSError:
+        pass
+        
+    if proc.returncode != 0:
+        err_msg = stderr.decode(errors="replace").strip()[:500]
+        log.error("Custom record save failed: %s", err_msg)
+        raise HTTPException(status_code=500, detail=f"ffmpeg error: {err_msg}")
+        
+    file_size = output_path.stat().st_size
+    log.info("Custom record saved: %s (%.2f MB)", output_path.name, file_size / 1024 / 1024)
+    
+    return {
+        "ok": True,
+        "filename": output_path.name,
+        "path": str(output_path),
+        "size_bytes": file_size,
+    }
+
+
+@app.post("/api/custom-record/cancel")
+async def api_custom_record_cancel():
+    state.custom_recording_started_at = None
     return {"ok": True}
 
 

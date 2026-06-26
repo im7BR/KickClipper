@@ -2,7 +2,7 @@
 Stream Clipper — Version & Configuration
 """
 
-VERSION = "1.0.7"
+VERSION = "1.1.0"
 APP_NAME = "StreamClipper"
 
 # GitHub repository for auto-updates (owner/repo format)

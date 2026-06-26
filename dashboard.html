@@ -298,6 +298,14 @@
                 >
                     Connect
                 </button>
+                <button
+                    id="disconnect-btn"
+                    onclick="handleDisconnect()"
+                    disabled
+                    class="px-5 py-3 bg-red-600/20 hover:bg-red-600/30 border border-red-500/20 text-red-400 rounded-xl font-bold text-sm hover:shadow-lg active:scale-[0.97] transition-all duration-200 whitespace-nowrap disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                    Disconnect
+                </button>
             </div>
         </section>
 
@@ -308,15 +316,27 @@
                     <div id="status-dot" class="w-3 h-3 rounded-full bg-gray-600 transition-colors duration-500"></div>
                     <span id="status-text" class="text-sm font-semibold text-gray-400">Not connected</span>
                 </div>
-                <div id="status-meta" class="flex items-center gap-4 text-xs text-gray-500 font-mono">
-                    <span id="buffer-info" class="hidden">
-                        <span class="text-gray-600">BUF</span>
-                        <span id="buffer-seconds" class="text-gray-400 ml-1">0s</span>
-                    </span>
-                    <span id="uptime-info" class="hidden">
-                        <span class="text-gray-600">UP</span>
-                        <span id="uptime-display" class="text-gray-400 ml-1">0s</span>
-                    </span>
+                <div class="flex items-center gap-4">
+                    <div id="custom-record-container" class="hidden">
+                        <button
+                            id="custom-record-btn"
+                            onclick="toggleCustomRecord()"
+                            class="px-4 py-1.5 bg-red-600/20 hover:bg-red-600/35 border border-red-500/30 text-red-400 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 duration-200"
+                        >
+                            <span id="custom-record-pulse-dot" class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                            <span id="custom-record-btn-text">Start Record</span>
+                        </button>
+                    </div>
+                    <div id="status-meta" class="flex items-center gap-4 text-xs text-gray-500 font-mono">
+                        <span id="buffer-info" class="hidden">
+                            <span class="text-gray-600">BUF</span>
+                            <span id="buffer-seconds" class="text-gray-400 ml-1">0s</span>
+                        </span>
+                        <span id="uptime-info" class="hidden">
+                            <span class="text-gray-600">UP</span>
+                            <span id="uptime-display" class="text-gray-400 ml-1">0s</span>
+                        </span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -457,6 +477,34 @@
     </div>
 
     <!-- ================================================================== -->
+    <!-- Custom Record Save Modal -->
+    <!-- ================================================================== -->
+    <div id="custom-record-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+        <div id="custom-record-modal-content" class="glass-strong rounded-3xl p-8 w-full max-w-md mx-4 animate-modal-in shadow-2xl shadow-black/50 border border-red-500/10">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-500/5 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-red-400 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="8"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">Save Custom Recording</h2>
+                    <p class="text-xs text-gray-500 font-medium">Name your custom recorded clip</p>
+                </div>
+            </div>
+            <input type="text" id="custom-record-title-input" placeholder="Enter a title for this recording..."
+                maxlength="200" autocomplete="off" spellcheck="false"
+                class="w-full bg-surface-800 border border-surface-500/50 rounded-xl py-3 px-4 text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all duration-200 text-sm font-medium mb-6" />
+            <div class="flex gap-3">
+                <button id="custom-record-cancel-btn" onclick="discardCustomRecord()"
+                    class="flex-1 py-3 px-4 rounded-xl bg-surface-700 text-gray-400 font-semibold text-sm hover:bg-surface-600 hover:text-gray-300 transition-all duration-200">Discard</button>
+                <button id="custom-record-submit-btn" onclick="submitCustomRecord()"
+                    class="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-red-600 to-red-400 text-white font-bold text-sm hover:shadow-lg hover:shadow-red-500/25 active:scale-[0.97] transition-all duration-200">Save Record</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
     <!-- Update Details Modal (hidden by default) -->
     <!-- ================================================================== -->
     <div id="update-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
@@ -544,6 +592,12 @@
         const updateBanner    = $('update-banner');
         const versionLabel    = $('version-label');
         const mainContainer   = $('main-container');
+        const customRecordContainer  = $('custom-record-container');
+        const customRecordBtn        = $('custom-record-btn');
+        const customRecordBtnText    = $('custom-record-btn-text');
+        const customRecordModal      = $('custom-record-modal');
+        const customRecordTitleInput = $('custom-record-title-input');
+        const disconnectBtn          = $('disconnect-btn');
 
         // -----------------------------------------------------------------
         // State
@@ -687,6 +741,7 @@
             isConnecting = true;
             connectBtn.disabled = true;
             connectBtn.textContent = 'Connecting...';
+            disconnectBtn.disabled = true;
 
             try {
                 const res = await fetch(`${API_BASE}/api/set-channel`, {
@@ -705,6 +760,25 @@
                 isConnecting = false;
                 connectBtn.disabled = false;
                 connectBtn.textContent = 'Connect';
+            }
+        }
+
+        async function handleDisconnect() {
+            showLoading(true, 'Disconnecting...', 'Stopping stream capture and clearing buffer');
+            try {
+                const res = await fetch(`${API_BASE}/api/stop`, {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                showToast("Disconnected successfully.", "success");
+                channelInput.value = "";
+            } catch (err) {
+                showToast(`Disconnect failed: ${err.message}`, 'error');
+            } finally {
+                showLoading(false);
             }
         }
 
@@ -740,6 +814,12 @@
                 uptimeInfo.classList.add('hidden');
                 clipBtns.forEach(b => b.disabled = true);
                 browseBtn.disabled = true;
+                customRecordContainer.classList.add('hidden');
+                disconnectBtn.disabled = true;
+                if (customRecordInterval) {
+                    clearInterval(customRecordInterval);
+                    customRecordInterval = null;
+                }
                 return;
             }
 
@@ -771,6 +851,12 @@
                 bufferInfo.classList.add('hidden');
                 uptimeInfo.classList.add('hidden');
                 clipBtns.forEach(b => b.disabled = true);
+                customRecordContainer.classList.add('hidden');
+                disconnectBtn.disabled = true;
+                if (customRecordInterval) {
+                    clearInterval(customRecordInterval);
+                    customRecordInterval = null;
+                }
                 return;
             }
             if (data.connecting) {
@@ -780,6 +866,12 @@
                 bufferInfo.classList.add('hidden');
                 uptimeInfo.classList.add('hidden');
                 clipBtns.forEach(b => b.disabled = true);
+                customRecordContainer.classList.add('hidden');
+                disconnectBtn.disabled = false;
+                if (customRecordInterval) {
+                    clearInterval(customRecordInterval);
+                    customRecordInterval = null;
+                }
                 return;
             }
             if (data.recording) {
@@ -794,6 +886,32 @@
                 $('clip-60-btn').disabled = buf < 30;
                 $('clip-120-btn').disabled = buf < 60;
                 $('clip-280-btn').disabled = buf < 140;
+
+                // Handle custom recording container/active state
+                customRecordContainer.classList.remove('hidden');
+                disconnectBtn.disabled = false;
+                if (data.custom_recording_active) {
+                    customRecordStartEpoch = data.custom_recording_started_at;
+                    if (!customRecordInterval) {
+                        customRecordInterval = setInterval(updateCustomRecordTimer, 1000);
+                        customRecordBtn.classList.remove('bg-red-600/20', 'text-red-400');
+                        customRecordBtn.classList.add('bg-red-600', 'text-white');
+                        $('custom-record-pulse-dot').classList.remove('bg-red-500');
+                        $('custom-record-pulse-dot').classList.add('bg-white');
+                    }
+                    updateCustomRecordTimer();
+                } else {
+                    if (customRecordInterval) {
+                        clearInterval(customRecordInterval);
+                        customRecordInterval = null;
+                    }
+                    customRecordStartEpoch = null;
+                    customRecordBtn.classList.add('bg-red-600/20', 'text-red-400');
+                    customRecordBtn.classList.remove('bg-red-600', 'text-white');
+                    $('custom-record-pulse-dot').classList.add('bg-red-500');
+                    $('custom-record-pulse-dot').classList.remove('bg-white');
+                    customRecordBtnText.textContent = "Start Record";
+                }
             } else {
                 statusDot.className = 'w-3 h-3 rounded-full bg-gray-600 transition-colors duration-500';
                 statusText.textContent = data.channel ? `Idle: ${data.channel}` : 'Not connected';
@@ -801,6 +919,12 @@
                 bufferInfo.classList.add('hidden');
                 uptimeInfo.classList.add('hidden');
                 clipBtns.forEach(b => b.disabled = true);
+                customRecordContainer.classList.add('hidden');
+                disconnectBtn.disabled = true;
+                if (customRecordInterval) {
+                    clearInterval(customRecordInterval);
+                    customRecordInterval = null;
+                }
             }
         }
 
@@ -835,10 +959,19 @@
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && !clipModal.classList.contains('hidden')) closeClipModal();
+            if (e.key === 'Escape' && !customRecordModal.classList.contains('hidden')) closeCustomRecordModal();
+        });
+
+        customRecordModal.addEventListener('click', (e) => {
+            if (e.target === customRecordModal) closeCustomRecordModal();
         });
 
         clipTitleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') submitClip();
+        });
+
+        customRecordTitleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitCustomRecord();
         });
 
         // -----------------------------------------------------------------
@@ -874,6 +1007,142 @@
                 loadClipsLibrary(false);
             } catch (err) {
                 showToast(`Clip failed: ${err.message}`, 'error', 6000);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Custom Recording
+        // -----------------------------------------------------------------
+        let customRecordInterval = null;
+        let customRecordStartEpoch = null;
+
+        function updateCustomRecordTimer() {
+            if (!customRecordStartEpoch) return;
+            const elapsed = Math.max(0, Math.floor(Date.now() / 1000 - customRecordStartEpoch));
+            const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const s = Math.floor(elapsed % 60).toString().padStart(2, '0');
+            customRecordBtnText.textContent = `Stop Record (${m}:${s})`;
+        }
+
+        async function startCustomRecord() {
+            try {
+                const res = await fetch(`${API_BASE}/api/custom-record/start`, {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                customRecordStartEpoch = data.started_at;
+                
+                // Toggle active styling immediately
+                if (!customRecordInterval) {
+                    customRecordInterval = setInterval(updateCustomRecordTimer, 1000);
+                    customRecordBtn.classList.remove('bg-red-600/20', 'text-red-400');
+                    customRecordBtn.classList.add('bg-red-600', 'text-white');
+                    $('custom-record-pulse-dot').classList.remove('bg-red-500');
+                    $('custom-record-pulse-dot').classList.add('bg-white');
+                }
+                updateCustomRecordTimer();
+                showToast("Custom recording started!", "success");
+            } catch (err) {
+                showToast(`Failed to start recording: ${err.message}`, 'error');
+            }
+        }
+
+        function toggleCustomRecord() {
+            if (customRecordInterval) {
+                // Open modal to save
+                customRecordTitleInput.value = '';
+                customRecordModal.classList.remove('hidden');
+                customRecordModal.classList.add('flex');
+                customRecordTitleInput.focus();
+            } else {
+                startCustomRecord();
+            }
+        }
+
+        function closeCustomRecordModal() {
+            customRecordModal.classList.add('hidden');
+            customRecordModal.classList.remove('flex');
+        }
+
+        async function submitCustomRecord() {
+            const title = customRecordTitleInput.value.trim();
+            if (!title) {
+                customRecordTitleInput.classList.add('border-red-500/50');
+                customRecordTitleInput.focus();
+                setTimeout(() => customRecordTitleInput.classList.remove('border-red-500/50'), 1500);
+                return;
+            }
+
+            closeCustomRecordModal();
+            showLoading(true, 'Saving Custom Record...', 'Slicing video segments');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/custom-record/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                const sizeMB = (data.size_bytes / 1024 / 1024).toFixed(1);
+                showToast(`Recording saved! ${data.filename} (${sizeMB} MB)`, 'success', 6000);
+                
+                // Clear state
+                if (customRecordInterval) {
+                    clearInterval(customRecordInterval);
+                    customRecordInterval = null;
+                }
+                customRecordStartEpoch = null;
+                customRecordBtn.classList.add('bg-red-600/20', 'text-red-400');
+                customRecordBtn.classList.remove('bg-red-600', 'text-white');
+                $('custom-record-pulse-dot').classList.add('bg-red-500');
+                $('custom-record-pulse-dot').classList.remove('bg-white');
+                customRecordBtnText.textContent = "Start Record";
+
+                loadClipsLibrary(false);
+            } catch (err) {
+                showToast(`Failed to save recording: ${err.message}`, 'error', 6000);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function discardCustomRecord() {
+            closeCustomRecordModal();
+            showLoading(true, 'Discarding Custom Record...', 'Cancelling custom recording');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/custom-record/cancel`, {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                showToast("Custom recording discarded.", "success");
+                
+                // Clear state
+                if (customRecordInterval) {
+                    clearInterval(customRecordInterval);
+                    customRecordInterval = null;
+                }
+                customRecordStartEpoch = null;
+                customRecordBtn.classList.add('bg-red-600/20', 'text-red-400');
+                customRecordBtn.classList.remove('bg-red-600', 'text-white');
+                $('custom-record-pulse-dot').classList.add('bg-red-500');
+                $('custom-record-pulse-dot').classList.remove('bg-white');
+                customRecordBtnText.textContent = "Start Record";
+            } catch (err) {
+                showToast(`Failed to discard recording: ${err.message}`, 'error');
             } finally {
                 showLoading(false);
             }
