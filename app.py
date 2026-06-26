@@ -1,8 +1,8 @@
 """
-Kick Clipper — Standalone Native Desktop App
+Stream Clipper — Standalone Native Desktop App
 ============================================
 Launches the FastAPI backend server, and opens a native desktop window
-rendering the Moderator Dashboard using pywebview.
+rendering the Desktop App UI using pywebview.
 """
 
 import multiprocessing
@@ -82,7 +82,7 @@ def start_server():
                 ctypes.windll.user32.MessageBoxW(
                     0, 
                     friendly_msg, 
-                    "Kick Clipper — Startup Error", 
+                    "Stream Clipper — Startup Error", 
                     0x10  # MB_ICONERROR
                 )
             except Exception:
@@ -120,7 +120,7 @@ def main():
     multiprocessing.freeze_support()
 
     print("=" * 50)
-    print("  Kick Clipper — Starting native window...")
+    print("  Stream Clipper — Starting native window...")
     print("=" * 50)
 
     # Start FastAPI server in a background thread
@@ -132,7 +132,7 @@ def main():
         # Open a native desktop GUI window displaying our dashboard served locally
         api = Api()
         webview.create_window(
-            title="Kick Clipper",
+            title="Stream Clipper",
             url=DASHBOARD_URL,
             width=900,
             height=780,
@@ -145,7 +145,14 @@ def main():
         
         # Once the window is closed, cleanly shutdown the background processes and exit
         print("Window closed. Shutting down application...")
-        os._exit(0)
+        try:
+            import requests
+            requests.post(f"http://{HOST}:{PORT}/api/stop", timeout=2)
+        except Exception as e:
+            print("Failed to stop capture on exit:", e)
+            
+        time.sleep(0.3)
+        sys.exit(0)
     else:
         print("Error: Local backend server failed to start. Exiting.")
         if getattr(sys, "frozen", False):
@@ -154,7 +161,7 @@ def main():
                 ctypes.windll.user32.MessageBoxW(
                     0, 
                     "Error: The backend server did not start in time. The application will close.", 
-                    "Kick Clipper — Timeout", 
+                    "Stream Clipper — Timeout", 
                     0x10
                 )
             except Exception:

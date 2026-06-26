@@ -35,37 +35,39 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          name: "Kick Clipper ${{ github.ref_name }}"
+          name: "Stream Clipper ${{ github.ref_name }}"
           body: |
-            # 🟢 Kick Clipper ${{ github.ref_name }}
+            # 🟢 Stream Clipper ${{ github.ref_name }}
             
             > [!IMPORTANT]
             > **Windows SmartScreen Warning**: Because this application is a custom self-compiled executable and not signed with an expensive Microsoft developer certificate, Windows Defender SmartScreen will show a warning saying "Windows protected your PC" on first launch.
             > **To bypass this and run the app**: Click on **"More info"** and then click the **"Run anyway"** button.
             
             ### 🚀 What's New:
-            - **Metadata & Icon Embedding**: Added full PE metadata (Description, Version, Company, Copyright) to the executable details and optimized icon embedding.
-            - **Merged Updater into Main App**: You now only need to download a single file: `KickClipper.exe`. The updater is fully built-in and extracts itself dynamically to perform updates automatically.
-            - **Fixed stuck CMD console window**: Subprocesses (like FFmpeg) are now spawned invisibly in the background. No more empty black console windows popping up on your screen when you connect to a streamer!
+            - **TikTok Webcast Fallback**: Resolved stream connection issues for mobile and guest streams (like `higm0555`) by implementing a fallback to the low-level Webcast API.
+            - **Exit Cleanup Fix**: Fixed the PyInstaller temporary directory warning popup on closing the app by implementing graceful process/thread termination.
+            - **Bypassed Stuck CMD**: Resolved the issue where background updater or server console windows remained stuck on the screen.
+            - **Platform Segments Toggle**: Added the option to choose between Kick and TikTok Live streams directly from the dashboard with custom dynamic accents.
+            - **Stream Clipper Rebranding**: Unified rebranding of the application name, metadata, and files to "Stream Clipper".
             
             ---
             
-            A custom, real-time live stream clipping tool designed for **Kick.com** stream moderators and creators.
+            A custom, real-time live stream clipping tool designed for **Kick.com** and **TikTok Live** stream viewers and creators.
             
             ## ✨ Features
-            - **🔄 Rolling HLS Buffer**: Automatically captures Kick streams in 10-second segments, keeping a rolling 5-minute buffer and discarding old segments to save disk space.
+            - **🔄 Rolling Stream Buffer**: Automatically captures live streams in 10-second segments, keeping a rolling 5-minute buffer and discarding old segments to save disk space.
             - **⚡ Instant Clipping**: Generates MP4 clips from the buffer in under 1 second without re-encoding.
             - **💻 Standalone Desktop Executable**: Everything is bundled — just download and run. No prerequisites needed.
-            - **🌐 Direct Kick API Integration**: Bypasses Cloudflare protection to access Kick streams directly. No headless browser or third-party plugins required.
+            - **🌐 Direct API Integration**: Bypasses Cloudflare protection to access Kick and TikTok streams directly. No headless browser required.
             - **📁 Custom Save Location**: Choose where your clips get saved with a native folder picker.
             - **💾 Auto-Reconnect**: Automatically reconnects to the last active channel on startup.
             - **🚀 One-Click Auto-Updates**: Receive notification of updates and upgrade the application in a single click directly from the dashboard.
             
             ## 📥 How to Run
-            1. Download `KickClipper.exe` from this release.
-            2. Run `KickClipper.exe` to launch the application. (Bypass SmartScreen by clicking *More info* -> *Run anyway*).
+            1. Download `StreamClipper.exe` from this release.
+            2. Run `StreamClipper.exe` to launch the application. (Bypass SmartScreen by clicking *More info* -> *Run anyway*).
             3. Select a save location for your clips.
-            4. Enter a Kick channel username and click Connect!
+            4. Choose your platform, enter a channel username, and click Connect!
             
             ## 📞 Contact & Support
             If you need help, want to suggest improvements, or have any questions, feel free to reach out:
@@ -73,6 +75,6 @@ jobs:
             - **Instagram**: [@aymen.7br](https://instagram.com/aymen.7br)
             - **Email**: [aymen7br@gmail.com](mailto:aymen7br@gmail.com)
           files: |
-            dist/KickClipper.exe
+            dist/StreamClipper.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

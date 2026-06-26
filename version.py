@@ -1,9 +1,9 @@
 """
-Kick Clipper — Version & Configuration
+Stream Clipper — Version & Configuration
 """
 
-VERSION = "1.0.4"
-APP_NAME = "KickClipper"
+VERSION = "1.0.7"
+APP_NAME = "StreamClipper"
 
 # GitHub repository for auto-updates (owner/repo format)
 # Change this to your actual GitHub repository after pushing
@@ -13,4 +13,4 @@ GITHUB_REPO = "im7BR/KickClipper"
 GITHUB_API_LATEST = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 # Asset name pattern to look for in releases
-ASSET_NAME = "KickClipper.exe"
+ASSET_NAME = "StreamClipper.exe"

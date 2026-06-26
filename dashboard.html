@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kick Clipper — Moderator Dashboard</title>
-    <meta name="description" content="Real-time live stream clipping tool for Kick.com moderators" />
+    <title>Stream Clipper — Dashboard</title>
+    <meta name="description" content="Real-time live stream clipping tool for Kick.com and TikTok Live viewers and creators" />
 
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -20,7 +20,11 @@
                 extend: {
                     fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
                     colors: {
-                        kick: { DEFAULT: '#53FC18', dark: '#3dd612', light: '#7dff52' },
+                        kick: {
+                            DEFAULT: 'var(--brand-color)',
+                            dark: 'var(--brand-dark)',
+                            light: 'var(--brand-light)'
+                        },
                         surface: {
                             900: '#0a0a0f',
                             800: '#0f0f1a',
@@ -57,8 +61,8 @@
                             '100%': { transform: 'scale(1) translateY(0)', opacity: '1' },
                         },
                         glow: {
-                            '0%': { boxShadow: '0 0 20px rgba(83, 252, 24, 0.1)' },
-                            '100%': { boxShadow: '0 0 40px rgba(83, 252, 24, 0.25)' },
+                            '0%': { boxShadow: '0 0 20px rgba(var(--brand-color-rgb), 0.1)' },
+                            '100%': { boxShadow: '0 0 40px rgba(var(--brand-color-rgb), 0.25)' },
                         },
                         bannerIn: {
                             '0%': { transform: 'translateY(-100%)', opacity: '0' },
@@ -71,22 +75,29 @@
     </script>
 
     <style>
+        :root {
+            --brand-color: #53FC18;
+            --brand-dark: #3dd612;
+            --brand-light: #7dff52;
+            --brand-color-rgb: 83, 252, 24;
+        }
+
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a0a0f; }
         ::-webkit-scrollbar-thumb { background: #2a2a42; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #53FC18; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--brand-color); }
 
         .glass {
             background: rgba(15, 15, 26, 0.7);
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
-            border: 1px solid rgba(83, 252, 24, 0.08);
+            border: 1px solid rgba(var(--brand-color-rgb), 0.08);
         }
         .glass-strong {
             background: rgba(22, 22, 37, 0.85);
             backdrop-filter: blur(32px);
             -webkit-backdrop-filter: blur(32px);
-            border: 1px solid rgba(83, 252, 24, 0.12);
+            border: 1px solid rgba(var(--brand-color-rgb), 0.12);
         }
         .gradient-border {
             position: relative;
@@ -97,7 +108,7 @@
             inset: -1px;
             border-radius: inherit;
             padding: 1px;
-            background: linear-gradient(135deg, rgba(83, 252, 24, 0.3), rgba(83, 252, 24, 0.05), rgba(83, 252, 24, 0.2));
+            background: linear-gradient(135deg, rgba(var(--brand-color-rgb), 0.3), rgba(var(--brand-color-rgb), 0.05), rgba(var(--brand-color-rgb), 0.2));
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
@@ -123,8 +134,8 @@
         }
         .clip-btn:hover::after { opacity: 1; }
         @keyframes statusPulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(83, 252, 24, 0.5); }
-            50% { box-shadow: 0 0 0 8px rgba(83, 252, 24, 0); }
+            0%, 100% { box-shadow: 0 0 0 0 rgba(var(--brand-color-rgb), 0.5); }
+            50% { box-shadow: 0 0 0 8px rgba(var(--brand-color-rgb), 0); }
         }
         .status-live { animation: statusPulse 2s ease-in-out infinite; }
         .modal-backdrop {
@@ -133,8 +144,8 @@
             -webkit-backdrop-filter: blur(8px);
         }
         .spinner {
-            border: 3px solid rgba(83, 252, 24, 0.15);
-            border-top-color: #53FC18;
+            border: 3px solid rgba(var(--brand-color-rgb), 0.15);
+            border-top-color: var(--brand-color);
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -206,11 +217,11 @@
                     </svg>
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-black tracking-tight">
-                    <span class="bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">Kick</span>
+                    <span class="bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">Stream</span>
                     <span class="bg-gradient-to-r from-kick to-kick-light bg-clip-text text-transparent"> Clipper</span>
                 </h1>
             </div>
-            <p class="text-gray-500 text-sm font-medium tracking-wide uppercase">Moderator Dashboard</p>
+            <p class="text-gray-500 text-sm font-medium tracking-wide uppercase">Live Stream Clipper</p>
         </header>
 
         <!-- Save Location Section -->
@@ -241,11 +252,32 @@
 
         <!-- Channel Input Section -->
         <section id="channel-section" class="glass rounded-2xl p-6 mb-6 gradient-border">
-            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Target Channel</label>
+            <div class="flex items-center justify-between mb-3.5">
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest">Target Channel</label>
+                <!-- Platform Segmented Tabs -->
+                <div class="flex bg-surface-900/60 p-0.5 rounded-xl border border-surface-500/20">
+                    <button
+                        type="button"
+                        id="platform-kick-btn"
+                        onclick="selectPlatform('kick')"
+                        class="px-3 py-1 rounded-lg text-[10px] sm:text-xs font-bold transition-all duration-200 bg-kick text-surface-900 shadow-sm"
+                    >
+                        Kick
+                    </button>
+                    <button
+                        type="button"
+                        id="platform-tiktok-btn"
+                        onclick="selectPlatform('tiktok')"
+                        class="px-3 py-1 rounded-lg text-[10px] sm:text-xs font-bold transition-all duration-200 text-gray-400 hover:text-white"
+                    >
+                        TikTok
+                    </button>
+                </div>
+            </div>
             <div class="flex gap-3">
                 <div class="flex-1 relative">
                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <span class="text-gray-500 text-sm font-medium">kick.com/</span>
+                        <span id="channel-prefix" class="text-gray-500 text-sm font-medium transition-all duration-200">kick.com/</span>
                     </div>
                     <input
                         type="text"
@@ -254,7 +286,8 @@
                         autocomplete="off"
                         spellcheck="false"
                         disabled
-                        class="w-full bg-surface-800 border border-surface-500/50 rounded-xl py-3 pl-24 pr-4 text-white placeholder-gray-600 focus:outline-none focus:border-kick/50 focus:ring-1 focus:ring-kick/20 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="w-full bg-surface-800 border border-surface-500/50 rounded-xl py-3 pr-4 text-white placeholder-gray-600 focus:outline-none focus:border-kick/50 focus:ring-1 focus:ring-kick/20 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        style="padding-left: 92px;"
                     />
                 </div>
                 <button
@@ -327,9 +360,61 @@
             </button>
         </section>
 
+        <!-- Clips Library Section -->
+        <section id="clips-library-section" class="glass rounded-2xl p-6 mb-6 gradient-border">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-kick/10 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-kick" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 8.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25a2.25 2.25 0 0 1-2.25 2.25h-2.25A2.25 2.25 0 0 1 13.5 8.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-white">Clips Library</h3>
+                </div>
+                <button
+                    onclick="loadClipsLibrary(true)"
+                    class="p-2 bg-surface-800 hover:bg-surface-700 border border-surface-500/20 rounded-xl text-gray-400 hover:text-white transition-colors duration-200"
+                    title="Refresh clips list"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Video Player (hidden when no video loaded) -->
+            <div id="library-player-container" class="hidden mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span id="playing-clip-title" class="text-sm font-semibold text-kick truncate max-w-[80%]">Playing clip</span>
+                    <button
+                        onclick="closeVideoPlayer()"
+                        class="text-gray-500 hover:text-white transition-colors text-xs font-semibold"
+                    >
+                        Close Player
+                    </button>
+                </div>
+                <div class="relative rounded-xl overflow-hidden border border-kick/20 bg-black aspect-video">
+                    <video
+                        id="library-video-player"
+                        class="w-full h-full"
+                        controls
+                        preload="auto"
+                    ></video>
+                </div>
+            </div>
+
+            <!-- Clips Grid -->
+            <div id="clips-grid-container">
+                <div class="flex flex-col items-center justify-center py-10 text-gray-600">
+                    <div class="spinner mb-4"></div>
+                    <p class="text-sm font-medium">Scanning clips folder...</p>
+                </div>
+            </div>
+        </section>
+
         <!-- Footer with version + check updates -->
         <footer class="flex items-center justify-between text-xs text-gray-600 px-1">
-            <p>Kick Clipper <span id="version-label">v1.0.0</span></p>
+            <p>Stream Clipper <span id="version-label">v1.0.0</span></p>
             <button
                 id="check-update-btn"
                 onclick="checkForUpdates(true)"
@@ -467,6 +552,38 @@
         let statusPollTimer = null;
         let isConnecting = false;
         let updateInfo = null;
+        let activePlatform = 'kick';
+
+        function selectPlatform(platform) {
+            activePlatform = platform;
+            const kickBtn = $('platform-kick-btn');
+            const tiktokBtn = $('platform-tiktok-btn');
+            const channelPrefix = $('channel-prefix');
+
+            if (platform === 'kick') {
+                kickBtn.className = 'px-3 py-1 rounded-lg text-[10px] sm:text-xs font-bold transition-all duration-200 bg-kick text-surface-900 shadow-sm';
+                tiktokBtn.className = 'px-3 py-1 rounded-lg text-[10px] sm:text-xs font-bold transition-all duration-200 text-gray-400 hover:text-white';
+                
+                document.documentElement.style.setProperty('--brand-color', '#53FC18');
+                document.documentElement.style.setProperty('--brand-dark', '#3dd612');
+                document.documentElement.style.setProperty('--brand-light', '#7dff52');
+                document.documentElement.style.setProperty('--brand-color-rgb', '83, 252, 24');
+
+                channelPrefix.textContent = 'kick.com/';
+                channelInput.style.paddingLeft = '92px';
+            } else {
+                kickBtn.className = 'px-3 py-1 rounded-lg text-[10px] sm:text-xs font-bold transition-all duration-200 text-gray-400 hover:text-white';
+                tiktokBtn.className = 'px-3 py-1 rounded-lg text-[10px] sm:text-xs font-bold transition-all duration-200 bg-kick text-surface-900 shadow-sm';
+                
+                document.documentElement.style.setProperty('--brand-color', '#00f2fe');
+                document.documentElement.style.setProperty('--brand-dark', '#ee1d52');
+                document.documentElement.style.setProperty('--brand-light', '#ffffff');
+                document.documentElement.style.setProperty('--brand-color-rgb', '0, 242, 254');
+
+                channelPrefix.textContent = 'tiktok.com/@';
+                channelInput.style.paddingLeft = '112px';
+            }
+        }
 
         // -----------------------------------------------------------------
         // Clip Button hover tracking
@@ -500,6 +617,9 @@
                     if (config.last_channel) {
                         channelInput.value = config.last_channel;
                     }
+                    if (config.last_platform) {
+                        selectPlatform(config.last_platform);
+                    }
                 }
             } catch {}
 
@@ -508,6 +628,9 @@
 
             // Check for updates silently on startup
             setTimeout(() => checkForUpdates(false), 2000);
+            
+            // Load initial clips library
+            loadClipsLibrary(false);
 
             // Handle #check-update hash (from tray menu)
             if (window.location.hash === '#check-update') {
@@ -536,6 +659,7 @@
                             connectBtn.disabled = false;
                             channelInput.disabled = false;
                             showToast('Save location set successfully!', 'success');
+                            loadClipsLibrary(false);
                         } else {
                             const err = await res.json().catch(() => ({}));
                             showToast(`Failed to save location: ${err.detail || 'Unknown error'}`, 'error');
@@ -568,7 +692,7 @@
                 const res = await fetch(`${API_BASE}/api/set-channel`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ channel }),
+                    body: JSON.stringify({ channel, platform: activePlatform }),
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
@@ -620,6 +744,10 @@
             }
 
             browseBtn.disabled = false;
+
+            if (data.platform && data.platform !== activePlatform && (data.recording || data.connecting)) {
+                selectPlatform(data.platform);
+            }
 
             // Handle clips directory UI state
             if (data.clips_dir) {
@@ -743,6 +871,7 @@
                 const data = await res.json();
                 const sizeMB = (data.size_bytes / 1024 / 1024).toFixed(1);
                 showToast(`Clip saved! ${data.filename} (${sizeMB} MB)`, 'success', 6000);
+                loadClipsLibrary(false);
             } catch (err) {
                 showToast(`Clip failed: ${err.message}`, 'error', 6000);
             } finally {
@@ -960,6 +1089,199 @@
             if (inList) output += '</ul>';
             
             return output;
+        }
+
+        // -----------------------------------------------------------------
+        // Clips Library Logic
+        // -----------------------------------------------------------------
+        let currentPlayingFilename = null;
+
+        async function loadClipsLibrary(showFeedback = false) {
+            const container = $('clips-grid-container');
+            if (showFeedback) {
+                showToast('Refreshing clips list...', 'success', 2000);
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/clips`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const clips = await res.json();
+
+                if (!clips || clips.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-10 text-gray-500">
+                            <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                            </svg>
+                            <p class="text-sm font-semibold">No clips found in save location</p>
+                            <p class="text-xs text-gray-600 mt-1">Start connecting to a channel and click a clip button to populate your library!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '<div class="space-y-3 max-h-[350px] overflow-y-auto pr-1">';
+                for (const clip of clips) {
+                    const sizeMB = (clip.size_bytes / 1024 / 1024).toFixed(1);
+                    const formattedDate = new Date(clip.created_at * 1000).toLocaleString();
+                    const isCurrent = currentPlayingFilename === clip.filename;
+
+                    html += `
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 p-3 rounded-xl bg-surface-800/40 hover:bg-surface-800/80 border border-surface-500/10 hover:border-surface-500/30 transition-all duration-200">
+                            <!-- Thumbnail Preview -->
+                            <div class="relative w-full sm:w-32 aspect-video rounded-lg overflow-hidden border border-surface-500/20 bg-black flex-shrink-0 cursor-pointer group/thumb" onclick="playClip('${escapeSingleQuotes(clip.filename)}')">
+                                <img 
+                                    src="${API_BASE}/api/clips/thumbnail?filename=${encodeURIComponent(clip.filename)}" 
+                                    alt="Clip thumbnail"
+                                    class="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform duration-300"
+                                    onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-full h-full flex items-center justify-center text-gray-600\\'><svg class=\\'w-6 h-6\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' d=\\'m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z\\'></path></svg></div>\\';"
+                                />
+                                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                                    <div class="w-8 h-8 rounded-full bg-kick text-surface-900 flex items-center justify-center shadow-lg shadow-kick/20">
+                                        <svg class="w-4 h-4 fill-currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Details & Action Buttons -->
+                            <div class="min-w-0 flex-1 flex flex-col justify-between py-0.5">
+                                <div>
+                                    <p class="text-sm font-bold text-white truncate ${isCurrent ? 'text-kick' : ''}" title="${escapeHtml(clip.filename)}">
+                                        ${escapeHtml(clip.filename)}
+                                    </p>
+                                    <p class="text-xs text-gray-500 font-medium mt-1 font-mono">
+                                        <span>${formattedDate}</span>
+                                        <span class="mx-1.5 opacity-40">•</span>
+                                        <span>${sizeMB} MB</span>
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-2 mt-3 sm:mt-2.5">
+                                    <!-- Play Button -->
+                                    <button
+                                        onclick="playClip('${escapeSingleQuotes(clip.filename)}')"
+                                        class="px-3 py-1.5 bg-kick/10 text-kick hover:bg-kick hover:text-surface-900 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5"
+                                    >
+                                        <svg class="w-3 h-3 fill-currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z"/>
+                                        </svg>
+                                        <span>Play</span>
+                                    </button>
+                                    <!-- Folder Button -->
+                                    <button
+                                        onclick="openClipFolder('${escapeSingleQuotes(clip.filename)}')"
+                                        class="p-1.5 bg-surface-700 hover:bg-surface-600 text-gray-300 hover:text-white border border-surface-500/20 rounded-lg transition-all duration-200 flex items-center justify-center"
+                                        title="Show in File Explorer"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+                                        </svg>
+                                    </button>
+                                    <!-- Delete Button -->
+                                    <button
+                                        onclick="confirmDeleteClip('${escapeSingleQuotes(clip.filename)}')"
+                                        class="p-1.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-all duration-200 flex items-center justify-center ml-auto sm:ml-0"
+                                        title="Delete Clip"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.34 9m-4.78 0L9 9m12 3a29.196 29.196 0 0 0-20.06-.01M21 12c.007.03.011.059.011.09a8.03 8.03 0 0 1-1.253 4.25m-14.73 0a8.03 8.03 0 0 1-1.253-4.25c0-.03.004-.059.011-.09M18.75 20.25H5.25a2.25 2.25 0 0 1-2.25-2.25v-13.5A2.25 2.25 0 0 1 5.25 2.25h13.5A2.25 2.25 0 0 1 21 4.5v13.5a2.25 2.25 0 0 1-2.25 2.25Z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                html += '</div>';
+                container.innerHTML = html;
+
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="text-center py-10 text-red-400">
+                        <p class="text-sm font-semibold">Failed to load clips library</p>
+                        <p class="text-xs text-red-500/70 mt-1">${err.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function escapeSingleQuotes(str) {
+            return str.replace(/'/g, "\\'");
+        }
+
+        function playClip(filename) {
+            currentPlayingFilename = filename;
+            $('playing-clip-title').textContent = filename;
+            
+            const playerContainer = $('library-player-container');
+            const player = $('library-video-player');
+            
+            player.src = `${API_BASE}/api/clips/file?filename=${encodeURIComponent(filename)}`;
+            playerContainer.classList.remove('hidden');
+            
+            player.load();
+            player.play().catch(() => {});
+            
+            // Scroll to the video player container smoothly
+            playerContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            
+            // Highlight playing clip in the list
+            loadClipsLibrary(false);
+        }
+
+        function closeVideoPlayer() {
+            const playerContainer = $('library-player-container');
+            const player = $('library-video-player');
+            
+            player.pause();
+            player.removeAttribute('src');
+            player.load();
+            
+            playerContainer.classList.add('hidden');
+            currentPlayingFilename = null;
+            
+            // Un-highlight in the list
+            loadClipsLibrary(false);
+        }
+
+        async function openClipFolder(filename) {
+            try {
+                const res = await fetch(`${API_BASE}/api/clips/open-folder`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename }),
+                });
+                if (!res.ok) throw new Error();
+                showToast('Opened folder in File Explorer', 'success');
+            } catch {
+                showToast('Failed to open clips folder', 'error');
+            }
+        }
+
+        function confirmDeleteClip(filename) {
+            if (confirm(`Are you sure you want to permanently delete "${filename}"?`)) {
+                deleteClip(filename);
+            }
+        }
+
+        async function deleteClip(filename) {
+            try {
+                const res = await fetch(`${API_BASE}/api/clips/delete?filename=${encodeURIComponent(filename)}`, {
+                    method: 'DELETE',
+                });
+                if (!res.ok) throw new Error();
+                showToast('Clip deleted successfully', 'success');
+                
+                // If it is the current playing video, close player
+                if (currentPlayingFilename === filename) {
+                    closeVideoPlayer();
+                } else {
+                    loadClipsLibrary(false);
+                }
+            } catch {
+                showToast('Failed to delete clip file', 'error');
+            }
         }
 
         // -----------------------------------------------------------------

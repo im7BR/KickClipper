@@ -111,6 +111,7 @@ class AppState:
 
     def __init__(self):
         self.channel: str | None = None
+        self.platform: str = "kick"
         self.recording: bool = False
         self.connecting: bool = False
         self.error: str | None = None
@@ -128,6 +129,7 @@ state = AppState()
 
 class SetChannelRequest(BaseModel):
     channel: str = Field(..., min_length=1, max_length=100)
+    platform: str = Field("kick", min_length=1, max_length=20)
 
 class SetClipsDirRequest(BaseModel):
     path: str = Field(..., min_length=1)
@@ -268,24 +270,152 @@ def _resolve_kick_hls(channel: str) -> str | None:
     return None
 
 
-async def _run_capture(channel: str):
+def _resolve_tiktok_hls(channel: str) -> str | None:
     """
-    Resolve HLS stream URL using Kick API directly via curl_cffi
+    Resolve the HLS .m3u8 playback URL for a TikTok live channel using the TikTok API
+    directly via curl_cffi. Returns the URL or None.
+    """
+    url = "https://www.tiktok.com/api-live/user/room"
+    params = {
+        "aid": 1988,
+        "sourceType": 54,
+        "uniqueId": channel,
+    }
+    headers = {
+        "Referer": f"https://www.tiktok.com/@{channel}/live",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    try:
+        log.info("Querying TikTok API for channel: %s", channel)
+        resp = cffi_requests.get(
+            url,
+            params=params,
+            headers=headers,
+            impersonate="chrome",
+            timeout=15
+        )
+        if resp.status_code != 200:
+            log.warning("TikTok API returned HTTP %d for %s", resp.status_code, channel)
+            return None
+
+        json_data = resp.json()
+        if json_data.get("statusCode") != 0:
+            log.warning("TikTok API status error: %s", json_data.get("message"))
+            return None
+
+        data = json_data.get("data", {})
+        user_data = data.get("user", {})
+        room_id = user_data.get("roomId")
+
+        live_room = data.get("liveRoom", {})
+        if not live_room:
+            log.warning("No liveRoom data in TikTok response for %s", channel)
+            return None
+
+        status = live_room.get("status")
+        if not status:
+            status = user_data.get("status")
+
+        if status == 4:
+            log.info("TikTok Channel '%s' is offline (status=4)", channel)
+            return None
+
+        pull_data = live_room.get("streamData", {}).get("pull_data", {})
+        stream_data_str = pull_data.get("stream_data")
+
+        # Fallback to webcast API if stream_data is missing but we have a room_id
+        if not stream_data_str and room_id:
+            log.info("Primary stream_data missing for %s. Querying webcast API for roomId %s...", channel, room_id)
+            try:
+                webcast_url = "https://webcast.tiktok.com/webcast/room/info"
+                webcast_params = {
+                    "aid": 1988,
+                    "room_id": room_id,
+                }
+                webcast_resp = cffi_requests.get(
+                    webcast_url,
+                    params=webcast_params,
+                    headers=headers,
+                    impersonate="chrome",
+                    timeout=15
+                )
+                if webcast_resp.status_code == 200:
+                    webcast_json = webcast_resp.json()
+                    webcast_room_data = webcast_json.get("data", {})
+                    webcast_status = webcast_room_data.get("status")
+                    if webcast_status == 4:
+                        log.info("TikTok Channel '%s' is offline via webcast API", channel)
+                        return None
+
+                    webcast_stream_url = webcast_room_data.get("stream_url", {})
+                    webcast_sdk_data = webcast_stream_url.get("live_core_sdk_data", {})
+                    webcast_pull_data = webcast_sdk_data.get("pull_data", {})
+                    stream_data_str = webcast_pull_data.get("stream_data")
+                else:
+                    log.warning("Webcast API returned HTTP %d", webcast_resp.status_code)
+            except Exception as e:
+                log.warning("Failed to fetch webcast data for %s: %s", channel, e)
+
+        if not stream_data_str:
+            log.warning("No stream_data string in TikTok responses for %s", channel)
+            return None
+
+        stream_data = json.loads(stream_data_str)
+        stream_profiles = stream_data.get("data", {})
+
+        # Priority order of qualities: origin -> uhd -> hd -> sd -> ld
+        for quality in ["origin", "uhd", "hd", "sd", "ld"]:
+            profile = stream_profiles.get(quality, {})
+            # Check main HLS
+            hls_url = profile.get("main", {}).get("hls")
+            if hls_url:
+                log.info("Resolved TikTok HLS URL (quality: %s)", quality)
+                return hls_url
+            # Check backup HLS
+            hls_url_backup = profile.get("backup", {}).get("hls")
+            if hls_url_backup:
+                log.info("Resolved TikTok backup HLS URL (quality: %s)", quality)
+                return hls_url_backup
+
+        # Fallback to FLV if no HLS is available
+        for quality in ["origin", "uhd", "hd", "sd", "ld"]:
+            profile = stream_profiles.get(quality, {})
+            flv_url = profile.get("main", {}).get("flv")
+            if flv_url:
+                log.info("Resolved TikTok FLV URL (quality: %s)", quality)
+                return flv_url
+
+    except Exception as e:
+        log.warning("TikTok API request failed for %s: %s", channel, e)
+
+    return None
+
+
+async def _run_capture(channel: str, platform: str):
+    """
+    Resolve HLS stream URL using appropriate API directly via curl_cffi
     and launch ffmpeg to capture it in a background thread.
     """
     state.error = None
     state.recording = False
     state.connecting = True
 
-    log.info("Resolving stream for channel: %s", channel)
+    log.info("Resolving stream for channel: %s (%s)", channel, platform)
 
     try:
-        # Resolve HLS URL from Kick API (blocking call wrapped in thread)
+        # Resolve HLS URL (blocking call wrapped in thread)
         try:
-            hls_url = await asyncio.wait_for(
-                asyncio.to_thread(_resolve_kick_hls, channel),
-                timeout=20.0,
-            )
+            if platform == "tiktok":
+                hls_url = await asyncio.wait_for(
+                    asyncio.to_thread(_resolve_tiktok_hls, channel),
+                    timeout=20.0,
+                )
+            else:
+                hls_url = await asyncio.wait_for(
+                    asyncio.to_thread(_resolve_kick_hls, channel),
+                    timeout=20.0,
+                )
         except asyncio.TimeoutError:
             state.error = "Connection timed out. Please check your internet or try again."
             log.error(state.error)
@@ -316,7 +446,7 @@ async def _run_capture(channel: str):
             segment_pattern,
         ]
 
-        log.info("Starting ffmpeg capture from HLS URL")
+        log.info("Starting ffmpeg capture from stream URL")
 
         creation_flags = 0
         if sys.platform == "win32":
@@ -332,7 +462,7 @@ async def _run_capture(channel: str):
         state._ffmpeg_proc = ff_proc
         state.recording = True
         state.started_at = time.time()
-        log.info("Recording started for channel: %s", channel)
+        log.info("Recording started for channel: %s (%s)", channel, platform)
 
         # Wait for ffmpeg to exit
         await asyncio.to_thread(ff_proc.wait)
@@ -518,6 +648,7 @@ async def api_status():
 
     return {
         "channel": state.channel,
+        "platform": state.platform,
         "recording": state.recording,
         "connecting": state.connecting,
         "error": state.error,
@@ -546,27 +677,42 @@ async def api_set_clips_dir(req: SetClipsDirRequest):
 
 @app.post("/api/set-channel")
 async def api_set_channel(req: SetChannelRequest):
-    """Set or change the target Kick channel."""
+    """Set or change the target channel and platform."""
     clips_dir = get_clips_dir()
     if not clips_dir:
         raise HTTPException(status_code=400, detail="Clips directory is not set. Please select a clips folder first.")
 
     channel = req.channel.strip().lower()
+    platform = req.platform.strip().lower()
+
+    if platform == "tiktok" and channel.startswith("@"):
+        channel = channel[1:]
 
     # Stop any existing capture
     await _stop_capture()
     _clear_buffer()
 
     state.channel = channel
+    state.platform = platform
     state.error = None
 
-    # Save channel to config for auto-reconnect
-    save_config({"last_channel": channel})
+    # Save channel and platform to config for auto-reconnect
+    save_config({"last_channel": channel, "last_platform": platform})
 
     # Start new capture in background
-    state._capture_task = asyncio.create_task(_run_capture(channel))
+    state._capture_task = asyncio.create_task(_run_capture(channel, platform))
 
-    return {"ok": True, "channel": channel, "message": f"Connecting to {channel}..."}
+    return {"ok": True, "channel": channel, "platform": platform, "message": f"Connecting to {channel} ({platform})..."}
+
+
+@app.post("/api/stop")
+async def api_stop_capture_endpoint():
+    """Stop capture and clear buffer."""
+    await _stop_capture()
+    _clear_buffer()
+    state.channel = None
+    state.platform = "kick"
+    return {"ok": True}
 
 
 @app.post("/api/create-clip")
@@ -721,6 +867,168 @@ async def api_apply_update():
     except Exception as e:
         log.exception("Update failed")
         raise HTTPException(status_code=500, detail=f"Update failed: {e}")
+
+# ---------------------------------------------------------------------------
+# Clips Library Endpoints
+# ---------------------------------------------------------------------------
+
+class ClipActionRequest(BaseModel):
+    filename: str
+
+
+def ensure_thumbnail(clip_path: Path) -> Path | None:
+    """Generate a 320x180 JPG thumbnail for an MP4 clip using FFmpeg."""
+    clips_dir = clip_path.parent
+    thumb_dir = clips_dir / ".thumbnails"
+    thumb_dir.mkdir(exist_ok=True)
+    thumb_path = thumb_dir / f"{clip_path.stem}.jpg"
+
+    if thumb_path.exists():
+        return thumb_path
+
+    try:
+        creation_flags = 0
+        if sys.platform == "win32":
+            creation_flags = 0x08000000  # CREATE_NO_WINDOW
+
+        # Extract frame at 1-second mark and scale to 320px width
+        subprocess.run([
+            FFMPEG_CMD,
+            "-hide_banner",
+            "-loglevel", "error",
+            "-y",
+            "-i", str(clip_path),
+            "-ss", "1",
+            "-vframes", "1",
+            "-vf", "scale=320:-1",
+            str(thumb_path)
+        ], check=True, creationflags=creation_flags, timeout=8)
+        return thumb_path
+    except Exception as e:
+        log.warning("Failed to generate thumbnail for %s: %s", clip_path.name, e)
+        return None
+
+
+@app.get("/api/clips")
+async def api_list_clips():
+    """List all clips (.mp4) in the clips directory."""
+    clips_dir = get_clips_dir()
+    if not clips_dir:
+        return []
+
+    clips = []
+    # Search for mp4 files
+    for f in clips_dir.glob("*.mp4"):
+        try:
+            stat = f.stat()
+            clips.append({
+                "filename": f.name,
+                "path": str(f.resolve()),
+                "size_bytes": stat.st_size,
+                "created_at": stat.st_mtime,
+            })
+        except OSError:
+            pass
+
+    # Sort by modification time, newest first
+    clips.sort(key=lambda x: x["created_at"], reverse=True)
+    return clips
+
+
+@app.get("/api/clips/file")
+async def api_get_clip_file(filename: str):
+    """Serve a specific clip file for HTML5 video playback."""
+    clips_dir = get_clips_dir()
+    if not clips_dir:
+        raise HTTPException(status_code=400, detail="Clips directory is not configured.")
+
+    # Avoid path traversal
+    safe_path = (clips_dir / filename).resolve()
+    if not safe_path.exists() or not safe_path.is_file() or clips_dir.resolve() not in safe_path.parents:
+        raise HTTPException(status_code=404, detail="Clip file not found or access denied.")
+
+    return FileResponse(
+        str(safe_path),
+        media_type="video/mp4",
+        headers={"Accept-Ranges": "bytes"}
+    )
+
+
+@app.get("/api/clips/thumbnail")
+async def api_get_clip_thumbnail(filename: str):
+    """Serve (and generate if needed) the thumbnail JPG image for a clip."""
+    clips_dir = get_clips_dir()
+    if not clips_dir:
+        raise HTTPException(status_code=400, detail="Clips directory is not configured.")
+
+    clip_path = clips_dir / filename
+    thumb_path = clips_dir / ".thumbnails" / f"{clip_path.stem}.jpg"
+
+    if not thumb_path.exists():
+        # Generate on the fly
+        if clip_path.exists() and clips_dir.resolve() in clip_path.resolve().parents:
+            await asyncio.to_thread(ensure_thumbnail, clip_path)
+
+    if thumb_path.exists() and clips_dir.resolve() in thumb_path.resolve().parents:
+        return FileResponse(str(thumb_path), media_type="image/jpeg")
+
+    raise HTTPException(status_code=404, detail="Thumbnail not found.")
+
+
+@app.post("/api/clips/open-folder")
+async def api_open_clip_folder(req: ClipActionRequest):
+    """Open the clips folder in Windows Explorer and select the file."""
+    clips_dir = get_clips_dir()
+    if not clips_dir:
+        raise HTTPException(status_code=400, detail="Clips directory is not configured.")
+
+    safe_path = (clips_dir / req.filename).resolve()
+    if not safe_path.exists() or clips_dir.resolve() not in safe_path.parents:
+        raise HTTPException(status_code=404, detail="Clip file not found or access denied.")
+
+    try:
+        if sys.platform == "win32":
+            creation_flags = 0x08000000  # CREATE_NO_WINDOW
+            subprocess.Popen(
+                f'explorer.exe /select,"{str(safe_path)}"',
+                creationflags=creation_flags
+            )
+        else:
+            # Fallback for other OS
+            import webbrowser
+            webbrowser.open(str(safe_path.parent))
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to open folder: {e}")
+
+
+@app.delete("/api/clips/delete")
+async def api_delete_clip(filename: str):
+    """Delete a clip file and its thumbnail from disk."""
+    clips_dir = get_clips_dir()
+    if not clips_dir:
+        raise HTTPException(status_code=400, detail="Clips directory is not configured.")
+
+    safe_path = (clips_dir / filename).resolve()
+    if not safe_path.exists() or clips_dir.resolve() not in safe_path.parents:
+        raise HTTPException(status_code=404, detail="Clip file not found or access denied.")
+
+    try:
+        # Delete clip file
+        safe_path.unlink()
+
+        # Try to delete associated thumbnail
+        thumb_path = clips_dir / ".thumbnails" / f"{safe_path.stem}.jpg"
+        try:
+            if thumb_path.exists():
+                thumb_path.unlink()
+        except Exception:
+            pass
+
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {e}")
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle Events

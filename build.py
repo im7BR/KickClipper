@@ -45,8 +45,8 @@ def build():
     print("Running:", " ".join(updater_cmd))
     subprocess.run(updater_cmd, check=True)
 
-    # 2. Build KickClipper.exe (main UI/tray/backend)
-    print("\n--- Building KickClipper.exe ---")
+    # 2. Build StreamClipper.exe (main UI/tray/backend)
+    print("\n--- Building StreamClipper.exe ---")
     # In Windows PyInstaller, add-data format is "source;dest"
     # dashboard.html will be placed at the root of the temp _MEIPASS folder
     app_cmd = [
@@ -54,7 +54,7 @@ def build():
         "--onefile",
         "--noconsole",
         "--clean",
-        "--name", "KickClipper",
+        "--name", "StreamClipper",
         "--add-data", "dashboard.html;.",
         "--add-data", "dist/updater.exe;.",
         "--icon", "logo.ico",
@@ -69,12 +69,12 @@ def build():
 
     # Verify output
     dist_dir = script_dir / "dist"
-    clipper_exe = dist_dir / "KickClipper.exe"
+    clipper_exe = dist_dir / "StreamClipper.exe"
     updater_exe = dist_dir / "updater.exe"
 
     if clipper_exe.exists() and updater_exe.exists():
         print("\n" + "="*60)
-        print("SUCCESSFULLY BUILT KICK CLIPPER DESKTOP APP!")
+        print("SUCCESSFULLY BUILT STREAM CLIPPER DESKTOP APP!")
         print(f"Main Executable: {clipper_exe}")
         print(f"Helper Updater:  {updater_exe}")
         print("Note: Both files must be kept in the same directory for auto-update to work.")
